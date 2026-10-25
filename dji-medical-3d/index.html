@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MEDEVAC-1 大型医疗救援无人机 · 救护可视化</title>
+<style>
+  :root {
+    --mono: "JetBrains Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+    --sans: "HarmonyOS Sans SC", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    --bg: #05090c;
+    --line: rgba(140, 200, 220, .16);
+    --panel: linear-gradient(160deg, rgba(14, 24, 30, .95), rgba(8, 14, 18, .95));
+    --text: #dceaf0;
+    --sub: #8ba3ad;
+    --friend: #4fd6a8;
+    --med: #e8eef2;
+    --red: #e0523f;
+    --hot: #ff8a6a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
+  body {
+    font-family: var(--sans); color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  #stage { position: fixed; inset: 0; z-index: 1; }
+  #stage canvas { display: block; }
+
+  /* ---------- 背景装饰层 ---------- */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(1200px 700px at 18% 12%, rgba(79, 214, 168, .07), transparent 60%),
+      radial-gradient(900px 600px at 88% 86%, rgba(224, 82, 63, .06), transparent 62%),
+      linear-gradient(180deg, #07110f 0%, #05090c 45%, #04070a 100%);
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+    background-image:
+      linear-gradient(rgba(150, 210, 220, .035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(150, 210, 220, .035) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(1200px 800px at 50% 45%, #000 30%, transparent 78%);
+  }
+
+  .hud-layer { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+  #lines { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: visible; }
+  #labels { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
+
+  /* ---------- 顶栏 ---------- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 62px; z-index: 6;
+    display: flex; align-items: center; gap: 18px; padding: 0 20px;
+    background: linear-gradient(180deg, rgba(5, 10, 13, .92), rgba(5, 10, 13, .35));
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand .mark {
+    width: 38px; height: 38px; border-radius: 10px; position: relative;
+    background: linear-gradient(135deg, #e8eef2, #b4bec6);
+    box-shadow: 0 0 18px rgba(79, 214, 168, .3);
+  }
+  .brand .mark::before, .brand .mark::after {
+    content: ""; position: absolute; background: var(--red); border-radius: 1px;
+  }
+  .brand .mark::before { left: 50%; top: 8px; width: 6px; height: 22px; margin-left: -3px; }
+  .brand .mark::after { top: 50%; left: 8px; height: 6px; width: 22px; margin-top: -3px; }
+  .brand h1 { font-size: 16px; margin: 0; letter-spacing: .04em; }
+  .brand p { margin: 1px 0 0; font-size: 10.5px; color: var(--sub); letter-spacing: .16em; font-family: var(--mono); }
+
+  .mission {
+    margin-left: auto; margin-right: auto; display: flex; gap: 18px;
+    font-family: var(--mono); font-size: 11px; color: var(--sub); letter-spacing: .1em;
+  }
+  .mission b { color: var(--friend); font-weight: 600; }
+  .mission .m { color: #cfe8dd; }
+
+  .actions { display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
+  .btn {
+    pointer-events: auto; font: inherit; font-size: 12px; color: var(--text);
+    padding: 8px 12px; border-radius: 9px; cursor: pointer;
+    border: 1px solid rgba(150, 210, 220, .22);
+    background: rgba(14, 22, 26, .88);
+    transition: border-color .18s, color .18s, background .18s, box-shadow .18s, transform .12s;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: rgba(79, 214, 168, .6); color: #fff; box-shadow: 0 0 16px rgba(79, 214, 168, .2); }
+  .btn:active { transform: translateY(1px); }
+  .btn.on { border-color: rgba(79, 214, 168, .8); color: #06231a; background: linear-gradient(135deg, #a8f0d8, #4fd6a8); font-weight: 600; }
+  .btn.med { border-color: rgba(224, 82, 63, .5); color: #ffd9d4; }
+  .btn.med:hover { border-color: rgba(224, 82, 63, .95); box-shadow: 0 0 18px rgba(224, 82, 63, .3); }
+  .btn.wide { width: 100%; }
+
+  /* ---------- 面板 ---------- */
+  .panel {
+    position: fixed; top: 78px; bottom: 86px; width: 296px;
+    display: flex; flex-direction: column;
+    border: 1px solid var(--line); border-radius: 16px;
+    background: var(--panel);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .04);
+    z-index: 6; pointer-events: auto;
+  }
+  #panel-parts { left: 18px; }
+  #panel-detail { right: 18px; }
+  .panel-head {
+    display: flex; align-items: center; gap: 10px; padding: 13px 15px 11px;
+    border-bottom: 1px solid var(--line);
+  }
+  .panel-head h2 { font-size: 13px; margin: 0; letter-spacing: .05em; }
+  .panel-head .count {
+    margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--sub);
+    border: 1px solid var(--line); border-radius: 20px; padding: 2px 9px;
+  }
+  .panel-head .tag {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: #cfe8dd;
+    border: 1px solid rgba(79, 214, 168, .3); border-radius: 20px; padding: 2px 9px;
+  }
+
+  #parts-list { list-style: none; margin: 0; padding: 8px; overflow-y: auto; flex: 1; }
+  #parts-list::-webkit-scrollbar, .detail-body::-webkit-scrollbar { width: 7px; }
+  #parts-list::-webkit-scrollbar-thumb, .detail-body::-webkit-scrollbar-thumb {
+    background: rgba(140, 200, 220, .22); border-radius: 4px;
+  }
+  .part-item {
+    display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 9px;
+    cursor: pointer; border: 1px solid transparent; transition: background .16s, border-color .16s;
+  }
+  .part-item:hover { background: rgba(79, 214, 168, .07); }
+  .part-item.active { background: rgba(79, 214, 168, .13); border-color: rgba(79, 214, 168, .45); }
+  .part-item .idx { font-family: var(--mono); font-size: 10px; color: var(--sub); width: 18px; }
+  .part-item .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--c, #6cf);
+    box-shadow: 0 0 9px var(--c, #6cf); flex: none;
+  }
+  .part-item .meta { display: flex; flex-direction: column; min-width: 0; }
+  .part-item .meta b { font-size: 12.5px; font-weight: 600; }
+  .part-item .meta i { font-style: normal; font-size: 10px; color: var(--sub); }
+  .panel-foot { padding: 10px; border-top: 1px solid var(--line); }
+
+  .detail-body { padding: 14px 15px; overflow-y: auto; flex: 1; font-size: 12.5px; line-height: 1.62; }
+  .detail-name { font-size: 18px; font-weight: 700; letter-spacing: .02em; }
+  .detail-en { font-family: var(--mono); font-size: 10.5px; color: var(--sub); letter-spacing: .1em; margin-top: 2px; }
+  .detail-role { margin: 11px 0 4px; color: #c3d6de; }
+  .sec-title {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .18em; color: var(--friend);
+    margin: 15px 0 7px; padding-bottom: 5px; border-bottom: 1px solid var(--line);
+  }
+  .spec { display: flex; gap: 10px; padding: 4px 0; font-size: 12px; }
+  .spec .k { color: var(--sub); flex: none; width: 84px; }
+  .spec .v { color: #e6f2f7; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    font-size: 10.5px; padding: 3px 9px; border-radius: 20px;
+    border: 1px solid var(--line); color: #cfe0e8; background: rgba(79, 214, 168, .06);
+  }
+
+  /* ---------- 伤员板 ---------- */
+  .casboard {
+    position: fixed; top: 74px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; z-index: 5; pointer-events: none;
+  }
+  .cas {
+    width: 152px; padding: 8px 10px; border-radius: 10px;
+    border: 1px solid rgba(150, 210, 220, .2);
+    background: rgba(8, 16, 20, .88);
+    box-shadow: 0 8px 26px rgba(0, 0, 0, .45);
+  }
+  .cas .r1 { display: flex; justify-content: space-between; align-items: baseline; }
+  .cas .r1 b { font-family: var(--mono); font-size: 11px; color: #eaf6fb; }
+  .cas .r1 span { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; color: var(--sub); }
+  .cas .r2 { font-family: var(--mono); font-size: 9px; color: #9fb6c0; margin-top: 3px; white-space: nowrap; }
+  .cas .bar { height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .09); margin-top: 6px; overflow: hidden; }
+  .cas .bar i { display: block; height: 100%; background: linear-gradient(90deg, #4fd6a8, #a8f0d8); transition: width .3s; }
+  .cas.critical { border-color: rgba(224, 82, 63, .8); box-shadow: 0 0 20px rgba(224, 82, 63, .28); }
+  .cas.critical .bar i { background: linear-gradient(90deg, #e0523f, #ff8a6a); }
+  .cas.severe { border-color: rgba(255, 176, 32, .6); }
+  .cas.severe .bar i { background: linear-gradient(90deg, #ffb020, #ffd98a); }
+  .cas.minor { border-color: rgba(79, 214, 168, .45); }
+  .cas.idle { opacity: .5; }
+  .cas.primary { outline: 1px solid rgba(79, 214, 168, .7); outline-offset: 1px; }
+  .cas.evacuated { border-color: rgba(79, 214, 168, .8); }
+  .cas.lost { border-color: rgba(120, 130, 136, .5); opacity: .55; }
+
+  /* ---------- 遥测 / 雷达 ---------- */
+  .telemetry {
+    position: fixed; left: 18px; bottom: 18px; z-index: 6;
+    font-family: var(--mono); font-size: 10.5px; padding: 10px 12px; border-radius: 5px;
+    border: 1px solid var(--line); border-left: 2px solid rgba(79, 214, 168, .75);
+    background: rgba(6, 12, 16, .9); min-width: 250px;
+  }
+  .telemetry .row { display: flex; gap: 16px; margin: 2px 0; }
+  .telemetry .k { color: var(--sub); letter-spacing: .1em; }
+  .telemetry .v { color: #dff0f6; }
+  .telemetry .v.ok { color: var(--friend); }
+  .telemetry .v.hot { color: var(--hot); }
+
+  .radar-wrap {
+    position: fixed; right: 18px; bottom: 18px; z-index: 6;
+    display: flex; align-items: center; gap: 12px; pointer-events: none;
+  }
+  #radar {
+    width: 92px; height: 92px; display: block;
+    border: 1px solid rgba(79, 214, 168, .35); border-radius: 50%;
+    background: rgba(6, 12, 14, .75);
+    box-shadow: 0 0 22px rgba(79, 214, 168, .14), inset 0 0 24px rgba(79, 214, 168, .07);
+  }
+  .radar-side { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; color: #a8d6c8; text-align: right; line-height: 1.75; }
+  .radar-side b { color: #d9f5ec; font-weight: 600; }
+  .radar-side .w { color: var(--hot); }
+
+  .hint {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 6;
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+    font-family: var(--mono); font-size: 10px; color: var(--sub);
+    padding: 8px 14px; border-radius: 20px;
+    border: 1px solid var(--line); background: rgba(6, 12, 16, .88);
+  }
+  .hint kbd {
+    font-family: var(--mono); color: #dff0f6; background: rgba(79, 214, 168, .12);
+    border: 1px solid rgba(79, 214, 168, .3); border-radius: 4px; padding: 1px 5px; margin-right: 3px;
+  }
+  .statusline {
+    position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 6;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: #cfeee2;
+    padding: 5px 14px; border-radius: 20px; white-space: nowrap;
+    border: 1px solid rgba(79, 214, 168, .28); background: rgba(6, 12, 16, .86);
+  }
+
+  /* ---------- 标注 / 锁定框 ---------- */
+  .label {
+    position: absolute; left: 0; top: 0; will-change: transform;
+    padding: 6px 10px; border-radius: 3px;
+    border: 1px solid rgba(79, 214, 168, .4); border-left: 2px solid rgba(224, 82, 63, .7);
+    background: rgba(6, 12, 16, .9);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, .5);
+    white-space: nowrap; opacity: 0; transition: opacity .28s;
+  }
+  .label.show { opacity: 1; }
+  .label .code { font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; color: rgba(224, 82, 63, .9); }
+  .label b { font-size: 11.5px; font-weight: 600; color: #eaf6ff; }
+  .label i { font-style: normal; font-size: 9.5px; color: #8fd6bb; letter-spacing: .04em; }
+  .leader { stroke: rgba(79, 214, 168, .55); stroke-width: 1; stroke-dasharray: 3 4; display: block; }
+  .leader.sel { stroke: rgba(224, 82, 63, .95); stroke-dasharray: none; stroke-width: 1.4; }
+
+  .lockbrk { fill: none; stroke: #4fd6a8; stroke-width: 1.6; stroke-linecap: square; opacity: 0; }
+  .lockbrk.on { opacity: .95; }
+  .lockbrk.enemy { stroke: #e0523f; }
+  .lockbrk.dead { stroke: #7a8489; }
+  .lockbox { fill: none; stroke: rgba(79, 214, 168, .3); stroke-width: 1; stroke-dasharray: 5 5; opacity: 0; }
+  .lockbox.on { opacity: 1; }
+  .lockbox.enemy { stroke: rgba(224, 82, 63, .45); }
+  .locktag {
+    position: absolute; left: 0; top: 0; z-index: 5;
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; color: #d9f5ec;
+    padding: 3px 8px; border-radius: 3px; white-space: nowrap;
+    background: rgba(6, 12, 16, .9); border: 1px solid rgba(79, 214, 168, .4);
+    opacity: 0; transition: opacity .2s;
+  }
+  .locktag.on { opacity: 1; }
+  .locktag.enemy { color: #ffd9d4; border-color: rgba(224, 82, 63, .5); }
+
+  #tip {
+    position: fixed; z-index: 8; transform: translate(12px, -50%);
+    font-size: 11px; font-family: var(--mono); padding: 5px 9px; border-radius: 4px;
+    background: rgba(6, 12, 16, .94); border: 1px solid var(--line);
+    color: #d9eef5; opacity: 0; transition: opacity .15s; pointer-events: none; white-space: nowrap;
+  }
+  #tip.show { opacity: 1; }
+  #tip.threat { color: #ffd9d4; border-color: rgba(224, 82, 63, .5); }
+
+  .reticle {
+    position: fixed; left: 50%; top: 50%; width: 150px; height: 150px; margin: -75px 0 0 -75px;
+    z-index: 2; pointer-events: none; opacity: .5;
+    background:
+      linear-gradient(rgba(79, 214, 168, .5), rgba(79, 214, 168, .5)) center/1px 18px no-repeat,
+      linear-gradient(rgba(79, 214, 168, .5), rgba(79, 214, 168, .5)) center/18px 1px no-repeat;
+  }
+  .reticle::before, .reticle::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    border: 1px dashed rgba(79, 214, 168, .18);
+  }
+  .reticle::after { inset: 30px; border-style: solid; border-color: rgba(79, 214, 168, .12); }
+
+  .hud-corner { position: fixed; width: 90px; height: 90px; z-index: 2; pointer-events: none; opacity: .45; }
+  .hud-corner.tl { left: 12px; top: 74px; border-left: 1px solid var(--friend); border-top: 1px solid var(--friend); }
+  .hud-corner.tr { right: 12px; top: 74px; border-right: 1px solid var(--friend); border-top: 1px solid var(--friend); }
+
+  .scanline {
+    position: fixed; left: 0; right: 0; height: 150px; top: 0; z-index: 3; pointer-events: none;
+    background: linear-gradient(180deg, transparent 0%, rgba(79, 214, 168, .04) 55%, rgba(79, 214, 168, .1) 100%);
+    animation: scanmove 9s linear infinite; will-change: transform;
+  }
+  @keyframes scanmove {
+    0% { transform: translate3d(0, -160px, 0); }
+    100% { transform: translate3d(0, 100vh, 0); }
+  }
+
+  #flash {
+    position: fixed; inset: 0; z-index: 7; pointer-events: none; opacity: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(224, 82, 63, .3), transparent 62%);
+    transition: opacity .12s;
+  }
+  #flash.on { opacity: 1; }
+
+  /* ---------- 启动遮罩 ---------- */
+  #boot {
+    position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+    background: radial-gradient(900px 600px at 50% 45%, #0a1714, #04070a 70%);
+    transition: opacity .45s;
+  }
+  #boot.hide { opacity: 0; pointer-events: none; }
+  #boot p { font-size: 13px; color: #8fd6bb; letter-spacing: .1em; font-family: var(--mono); }
+  #boot p.err { color: #ffb4a6; font-size: 12.5px; line-height: 1.7; max-width: 520px; text-align: center; letter-spacing: 0; }
+  .spinner {
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 2px solid rgba(79, 214, 168, .18); border-top-color: var(--friend);
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+<div class="hud-layer">
+  <div class="reticle"></div>
+  <div class="hud-corner tl"></div>
+  <div class="hud-corner tr"></div>
+  <div class="scanline"></div>
+</div>
+<svg id="lines" xmlns="http://www.w3.org/2000/svg"></svg>
+<div id="labels"></div>
+<div id="tip"></div>
+<div id="flash"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="mark"></div>
+    <div>
+      <h1>大型医疗救援无人机 · 救护可视化</h1>
+      <p>MEDEVAC-1 · LIFE SCAN · TRIAGE · RESCUE</p>
+    </div>
+  </div>
+  <div class="mission">
+    <span>MEDEVAC-1</span><span>·</span>
+    <span class="m" id="m-mode">MODE SEARCH</span><span>·</span>
+    <span>批次 <b id="m-wave">1</b></span><span>·</span>
+    <span>已救治 <b id="m-kill">0</b></span><span>·</span>
+    <span>待救治 <b id="m-threat">0</b></span>
+  </div>
+  <div class="actions">
+    <button class="btn on" id="btn-auto">自动救护</button>
+    <button class="btn med" id="btn-drop">投送物资 D</button>
+    <button class="btn med" id="btn-hoist">吊救后送 H</button>
+    <button class="btn" id="btn-wave">下一批 N</button>
+    <button class="btn" id="btn-parts">部件清单</button>
+    <button class="btn" id="btn-detail">参数说明</button>
+    <button class="btn" id="btn-explode">拆解</button>
+    <button class="btn" id="btn-rotate">自动旋转</button>
+    <button class="btn on" id="btn-labels">标注</button>
+    <button class="btn" id="btn-reset">重置视角</button>
+  </div>
+</header>
+
+<div class="casboard" id="casualtyboard"></div>
+
+<aside class="panel" id="panel-parts">
+  <div class="panel-head">
+    <h2>部件清单</h2>
+    <span class="count" id="parts-count">—</span>
+  </div>
+  <ul id="parts-list"></ul>
+  <div class="panel-foot">
+    <button class="btn wide" id="btn-expand-all">一键拆解 / 合拢</button>
+  </div>
+</aside>
+
+<aside class="panel" id="panel-detail">
+  <div class="panel-head">
+    <h2>参数说明</h2>
+    <span class="tag" id="detail-tag">整机</span>
+  </div>
+  <div class="detail-body" id="detail-body"></div>
+</aside>
+
+<div class="telemetry" id="telemetry-body"></div>
+
+<div class="radar-wrap">
+  <div class="radar-side">
+    <div>RNG <b id="rd-rng">—</b></div>
+    <div>CONT <b id="rd-cont">00</b></div>
+    <div>BLOOD <b id="rd-sup1">6/6</b></div>
+    <div>DRUG <b id="rd-sup2">8/8</b></div>
+  </div>
+  <canvas id="radar"></canvas>
+</div>
+
+<div class="statusline" id="m-status">待命 · 生命探测雷达扫描中</div>
+
+<div class="hint">
+  <span><kbd>左键拖拽</kbd>旋转</span>
+  <span><kbd>滚轮</kbd>缩放</span>
+  <span><kbd>右键拖拽</kbd>平移</span>
+  <span><kbd>点击伤员</kbd>指定救治对象</span>
+  <span><kbd>D</kbd>投送物资</span>
+  <span><kbd>H</kbd>吊救后送</span>
+  <span><kbd>G</kbd>自动救护</span>
+  <span><kbd>E</kbd>拆解</span>
+  <span><kbd>R</kbd>重置视角</span>
+</div>
+
+<div id="boot">
+  <div class="spinner"></div>
+  <p id="boot-text">正在加载 Three.js…</p>
+</div>
+
+<script>
+  /* 启动看门狗：任何脚本报错 / 404 / 超时都直接把原因显示出来，绝不一直转圈 */
+  (function () {
+    window.__djiBooted = false;
+    var boot = document.getElementById('boot');
+    var txt = document.getElementById('boot-text');
+    function fail(msg) {
+      if (window.__djiBooted || window.__djiFailed) return;
+      window.__djiFailed = true;
+      if (!boot) return;
+      boot.classList.remove('hide');
+      boot.innerHTML = '<div style="font-size:34px">⚠︎</div><p class="err"><b>初始化失败</b><br><br>' +
+        msg + '<br><br>请确认 casualties.js / model-medical.js / medical.js / engine.js 与 vendor/three.min.js ' +
+        '都和页面在同一目录，或按 F12 查看控制台报错。</p>';
+    }
+    window.__djiFail = fail;
+    window.addEventListener('error', function (e) {
+      if (e && e.target && e.target.tagName === 'SCRIPT') {
+        fail('脚本加载失败：' + (e.target.src || '未知脚本'));
+      } else if (e && e.message) {
+        fail('脚本错误：' + e.message);
+      }
+    }, true);
+    setTimeout(function () {
+      if (!window.__djiBooted) fail('超过 18 秒仍未完成初始化。');
+    }, 18000);
+  })();
+</script>
+<script src="casualties.js" defer></script>
+<script src="model-medical.js" defer></script>
+<script src="medical.js" defer></script>
+<script src="engine.js" defer></script>
+</body>
+</html>

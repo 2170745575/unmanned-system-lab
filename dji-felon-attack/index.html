@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<title>FELON-1 · 攻击无人机作战可视化</title>
+<style>
+  :root {
+    --bg: #04060b;
+    --accent: #22d3ee;
+    --friend: #9ab26a;
+    --amber: #ffb020;
+    --threat: #ff4d3d;
+    --text: #e6eef8;
+    --text-dim: #8fa3b8;
+    --line: rgba(154, 178, 106, .22);
+    --panel: rgba(9, 14, 22, .74);
+    --panel-solid: rgba(9, 14, 22, .95);
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text); overflow: hidden;
+    font-family: "Inter", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+
+  body::before {
+    content: ""; position: fixed; inset: 0;
+    background:
+      radial-gradient(900px 620px at 50% 10%, rgba(154, 178, 106, .10), transparent 70%),
+      radial-gradient(760px 560px at 86% 92%, rgba(255, 77, 61, .08), transparent 72%),
+      linear-gradient(180deg, #070b12 0%, #04060b 55%, #03050a 100%);
+    z-index: 0;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(150, 180, 160, .05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(150, 180, 160, .05) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 10%, transparent 78%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 10%, transparent 78%);
+    z-index: 0; pointer-events: none;
+  }
+
+  #stage { position: fixed; inset: 0; z-index: 1; }
+  #stage canvas { display: block; }
+  #lines { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: visible; }
+  #labels { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
+  .hud { z-index: 6; }
+
+  /* ---------- 顶栏 ---------- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 18px; padding: 14px 22px;
+    background: linear-gradient(180deg, rgba(4, 6, 11, .94) 0%, rgba(4, 6, 11, .55) 62%, transparent 100%);
+    pointer-events: none;
+  }
+  .topbar .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .logo {
+    font-weight: 800; font-size: 13px; letter-spacing: .14em;
+    padding: 9px 11px; border-radius: 9px; color: #0a1206;
+    background: linear-gradient(135deg, #e9f2d4, #b9cf88);
+    box-shadow: 0 0 22px rgba(154, 178, 106, .35);
+    flex: none;
+  }
+  .titles { min-width: 0; }
+  .titles h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .titles h1 span { color: var(--friend); font-weight: 500; }
+  .titles p { margin: 3px 0 0; font-size: 11px; color: var(--text-dim); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .actions { display: flex; gap: 7px; pointer-events: auto; flex-wrap: wrap; justify-content: flex-end; }
+
+  .btn {
+    pointer-events: auto; font: inherit; font-size: 12px; color: var(--text);
+    padding: 8px 12px; border-radius: 9px; cursor: pointer;
+    border: 1px solid rgba(150, 180, 160, .22);
+    background: rgba(14, 20, 26, .88);
+    transition: border-color .18s, color .18s, background .18s, box-shadow .18s, transform .12s;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: rgba(154, 178, 106, .65); color: #fff; box-shadow: 0 0 16px rgba(154, 178, 106, .22); }
+  .btn:active { transform: translateY(1px); }
+  .btn.on { border-color: rgba(154, 178, 106, .8); color: #12180a; background: linear-gradient(135deg, #c7dd97, #9ab26a); font-weight: 600; }
+  .btn.fire { border-color: rgba(255, 77, 61, .55); color: #ffd9d4; }
+  .btn.fire:hover { border-color: rgba(255, 77, 61, .95); box-shadow: 0 0 18px rgba(255, 77, 61, .35); }
+  .btn.fire:disabled { opacity: .35; cursor: not-allowed; }
+  .btn.wide { width: 100%; }
+  .btn.toggle { display: none; }
+
+  /* ---------- 面板 ---------- */
+  .panel {
+    position: fixed; top: 118px; bottom: 92px; width: 300px;
+    display: flex; flex-direction: column;
+    border: 1px solid var(--line); border-radius: 16px;
+    background: var(--panel);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .04);
+    overflow: hidden;
+    transition: transform .28s cubic-bezier(.4, 0, .2, 1), opacity .28s;
+  }
+  .panel-left { left: 22px; }
+  .panel-right { right: 22px; width: 322px; }
+  .panel::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(154, 178, 106, .75), transparent);
+  }
+  .panel-head { display: flex; align-items: center; gap: 10px; padding: 13px 16px 10px; border-bottom: 1px solid rgba(150, 180, 160, .1); }
+  .panel-head h2 { margin: 0; font-size: 13px; font-weight: 650; letter-spacing: .08em; }
+  .badge {
+    margin-left: auto; font-size: 10px; letter-spacing: .08em; padding: 3px 8px; border-radius: 999px;
+    color: var(--friend); border: 1px solid rgba(154, 178, 106, .35); background: rgba(154, 178, 106, .08);
+    white-space: nowrap; max-width: 62%; overflow: hidden; text-overflow: ellipsis;
+  }
+  .panel-sub { padding: 9px 16px 10px; font-size: 11px; color: var(--text-dim); line-height: 1.5; border-bottom: 1px solid rgba(150, 180, 160, .07); }
+
+  .parts-list { margin: 0; padding: 8px; list-style: none; overflow-y: auto; flex: 1; scrollbar-width: thin; }
+  .parts-list::-webkit-scrollbar { width: 6px; }
+  .parts-list::-webkit-scrollbar-thumb { background: rgba(154, 178, 106, .28); border-radius: 3px; }
+  .part-item {
+    display: flex; align-items: center; gap: 10px; padding: 7px 10px; margin-bottom: 3px;
+    border-radius: 10px; cursor: pointer; border: 1px solid transparent;
+    transition: background .16s, border-color .16s;
+  }
+  .part-item:hover { background: rgba(154, 178, 106, .08); border-color: rgba(154, 178, 106, .24); }
+  .part-item.active { background: linear-gradient(90deg, rgba(154, 178, 106, .18), rgba(154, 178, 106, .03)); border-color: rgba(154, 178, 106, .55); }
+  .part-item .idx { font-size: 10px; color: #5b6d80; font-variant-numeric: tabular-nums; width: 16px; flex: none; }
+  .part-item .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--c, #9ab26a); box-shadow: 0 0 10px var(--c, #9ab26a); }
+  .part-item .meta { min-width: 0; display: flex; flex-direction: column; }
+  .part-item .meta b { font-size: 12.5px; font-weight: 560; }
+  .part-item .meta i { font-style: normal; font-size: 10px; color: var(--text-dim); letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .part-item.active .meta b { color: #fff; }
+  .panel-foot { padding: 12px 14px 14px; border-top: 1px solid rgba(150, 180, 160, .1); }
+  .note { margin: 9px 0 0; font-size: 10px; line-height: 1.55; color: #63748a; }
+
+  .detail-body { padding: 14px 16px 20px; overflow-y: auto; flex: 1; scrollbar-width: thin; }
+  .detail-body::-webkit-scrollbar { width: 6px; }
+  .detail-body::-webkit-scrollbar-thumb { background: rgba(154, 178, 106, .28); border-radius: 3px; }
+  .detail-name { font-size: 17px; font-weight: 650; }
+  .detail-en { font-size: 10.5px; color: var(--friend); letter-spacing: .1em; text-transform: uppercase; margin-top: 4px; }
+  .detail-role { margin: 12px 0 16px; font-size: 12px; line-height: 1.72; color: #b7c7d8; padding-left: 11px; border-left: 2px solid rgba(154, 178, 106, .55); }
+  .sec-title { display: flex; align-items: center; gap: 8px; font-size: 10.5px; letter-spacing: .16em; color: #6f8499; text-transform: uppercase; margin: 16px 0 9px; }
+  .sec-title::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(150, 180, 160, .22), transparent); }
+  .spec { display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px dashed rgba(150, 180, 160, .1); font-size: 12px; }
+  .spec:last-child { border-bottom: 0; }
+  .spec .k { color: #7e91a6; flex: none; width: 84px; }
+  .spec .v { color: #dbe7f4; flex: 1; line-height: 1.55; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .chip { font-size: 10.5px; padding: 4px 9px; border-radius: 999px; color: #cfe0a8; background: rgba(154, 178, 106, .1); border: 1px solid rgba(154, 178, 106, .28); }
+
+  /* ---------- 3D 标注 ---------- */
+  .label {
+    position: absolute; top: 0; left: 0; display: flex; flex-direction: column; gap: 2px;
+    padding: 6px 10px; border-radius: 3px;
+    border: 1px solid rgba(154, 178, 106, .4); border-left: 2px solid rgba(255, 176, 32, .8);
+    background: rgba(8, 12, 16, .9);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, .5);
+    white-space: nowrap; opacity: 0; transition: opacity .28s; will-change: transform;
+  }
+  .label.show { opacity: 1; }
+  .label .code { font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; color: rgba(255, 176, 32, .88); }
+  .label b { font-size: 11.5px; font-weight: 600; color: #eaf6ff; }
+  .label i { font-style: normal; font-size: 9.5px; color: #a8c47e; letter-spacing: .04em; }
+  .label.sel { border-color: rgba(255, 176, 32, .95); box-shadow: 0 6px 26px rgba(0, 0, 0, .6), 0 0 22px rgba(255, 176, 32, .35); }
+
+  .leader { stroke: rgba(154, 178, 106, .45); stroke-width: 1; }
+  .leader.sel { stroke: rgba(255, 176, 32, .95); stroke-width: 1.4; }
+
+  /* ---------- 提示 ---------- */
+  .hint {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center;
+    padding: 8px 14px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel); backdrop-filter: blur(12px);
+    font-size: 11.5px; color: #a9bccd; max-width: min(880px, calc(100vw - 40px));
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .5);
+  }
+  .hint kbd { font: inherit; font-size: 10.5px; padding: 2px 6px; border-radius: 5px; color: #d8e6bd; background: rgba(154, 178, 106, .12); border: 1px solid rgba(154, 178, 106, .3); }
+  .hint span.sep { color: #35485c; }
+
+  .tip {
+    position: fixed; z-index: 7; pointer-events: none; transform: translate(14px, 14px);
+    padding: 5px 10px; border-radius: 8px; font-size: 11.5px; color: #eaf9ff;
+    background: rgba(8, 16, 26, .9); border: 1px solid rgba(154, 178, 106, .45);
+    box-shadow: 0 0 18px rgba(154, 178, 106, .25); opacity: 0; transition: opacity .16s;
+  }
+  .tip.show { opacity: 1; }
+  .tip.threat { border-color: rgba(255, 77, 61, .65); box-shadow: 0 0 18px rgba(255, 77, 61, .3); color: #ffe4e0; }
+
+  /* ---------- 战术 HUD ---------- */
+  .mono { font-family: var(--mono); }
+  .hud-layer { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+  .hud-corner { position: fixed; width: 40px; height: 40px; border: 1px solid rgba(255, 176, 32, .45); }
+  .hud-corner.tl { top: 78px; left: 14px; border-right: 0; border-bottom: 0; }
+  .hud-corner.tr { top: 78px; right: 14px; border-left: 0; border-bottom: 0; }
+
+  .reticle { position: fixed; left: 50%; top: 50%; width: 54px; height: 54px; transform: translate(-50%, -50%); opacity: .45; }
+  .reticle::before, .reticle::after { content: ""; position: absolute; background: rgba(255, 176, 32, .8); }
+  .reticle::before { left: 50%; top: 0; width: 1px; height: 100%; transform: translateX(-50%); }
+  .reticle::after { top: 50%; left: 0; height: 1px; width: 100%; transform: translateY(-50%); }
+  .reticle span { position: absolute; inset: 18px; border: 1px solid rgba(255, 176, 32, .55); border-radius: 50%; }
+
+  .mission {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .16em;
+    color: rgba(255, 176, 32, .9); text-shadow: 0 0 12px rgba(255, 176, 32, .35); white-space: nowrap;
+  }
+  .mission b { color: var(--friend); font-weight: 600; }
+  .mission em { font-style: normal; color: #8fa3b8; }
+  .mission .hot { color: #ff6a5a; }
+
+  /* 目标板 */
+  .targetboard {
+    position: fixed; top: 42px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 7px; align-items: stretch;
+  }
+  .tgt {
+    min-width: 138px; padding: 6px 9px 7px; border-radius: 4px;
+    border: 1px solid rgba(255, 77, 61, .32); border-top: 2px solid rgba(255, 77, 61, .7);
+    background: rgba(14, 8, 8, .88);
+    font-family: var(--mono); font-size: 9.5px; line-height: 1.5; color: #ffd9d4;
+    opacity: .55; transition: opacity .2s, border-color .2s, box-shadow .2s;
+  }
+  .tgt.detected { opacity: .85; }
+  .tgt.locked { opacity: 1; border-color: rgba(255, 120, 60, .9); box-shadow: 0 0 18px rgba(255, 77, 61, .28); }
+  .tgt.dead { opacity: .3; border-color: rgba(120, 120, 120, .4); border-top-color: rgba(120, 120, 120, .6); color: #9aa3ad; }
+  .tgt.primary { border-color: #ff4d3d; box-shadow: 0 0 22px rgba(255, 77, 61, .45); }
+  .tgt .r1 { display: flex; justify-content: space-between; gap: 8px; color: #fff; }
+  .tgt .r1 b { font-weight: 600; letter-spacing: .06em; }
+  .tgt .r2 { color: #ffb9ae; }
+  .tgt .bar { height: 3px; margin-top: 3px; background: rgba(255, 255, 255, .12); border-radius: 2px; overflow: hidden; }
+  .tgt .bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff8a3d, #ff4d3d); }
+  .tgt .bar.scan i { background: linear-gradient(90deg, #ffd070, #ffb020); }
+
+  /* 遥测 */
+  .telemetry {
+    position: fixed; left: 22px; bottom: 12px; width: 300px; padding: 8px 11px 9px;
+    border: 1px solid rgba(255, 176, 32, .26); border-left: 2px solid rgba(255, 176, 32, .8);
+    border-radius: 4px; background: rgba(8, 12, 18, .76); backdrop-filter: blur(8px);
+    font-family: var(--mono); font-size: 10.5px; line-height: 1.62; color: #ffc95e; letter-spacing: .04em;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  }
+  .telemetry .row { display: flex; gap: 9px; }
+  .telemetry .k { color: #74869a; flex: none; }
+  .telemetry .v { color: #ffd489; }
+  .telemetry .ok { color: #b9d78a; }
+  .telemetry .hot { color: #ff6a5a; }
+
+  /* 雷达 + 武器状态 */
+  .radar-wrap { position: fixed; right: 22px; bottom: 12px; display: flex; align-items: flex-end; gap: 10px; }
+  #radar {
+    width: 78px; height: 78px; display: block;
+    border: 1px solid rgba(255, 120, 60, .35); border-radius: 50%;
+    background: rgba(10, 6, 6, .72);
+    box-shadow: 0 0 20px rgba(255, 77, 61, .16), inset 0 0 22px rgba(255, 77, 61, .08);
+  }
+  .radar-side { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; color: #ffb9ae; text-align: right; line-height: 1.7; }
+  .radar-side b { color: #ffd9d4; font-weight: 600; }
+  .radar-side .w { color: #ff6a5a; }
+
+  .scanline {
+    position: fixed; left: 0; right: 0; height: 150px; top: 0;
+    background: linear-gradient(180deg, transparent 0%, rgba(255, 120, 60, .04) 55%, rgba(255, 120, 60, .13) 100%);
+    /* 用 transform 动画（GPU 合成），不用 top（每帧触发布局重排）；也不加 mix-blend-mode，
+       否则每帧都要和 WebGL canvas 做一次全屏混合 */
+    animation: scanmove 8s linear infinite;
+    will-change: transform;
+  }
+  @keyframes scanmove {
+    0%   { transform: translate3d(0, -160px, 0); }
+    100% { transform: translate3d(0, 100vh, 0); }
+  }
+
+  .lockbrk { fill: none; stroke: #ffb020; stroke-width: 1.6; stroke-linecap: square; opacity: 0; }
+  .lockbrk.on { opacity: .95; }
+  .lockbrk.enemy { stroke: #ff4d3d; }
+  .lockbox { fill: none; stroke: rgba(255, 176, 32, .32); stroke-width: 1; stroke-dasharray: 5 5; opacity: 0; }
+  .lockbox.on { opacity: 1; }
+  .lockbox.enemy { stroke: rgba(255, 77, 61, .38); }
+  .locktag {
+    position: fixed; left: 0; top: 0; z-index: 6; pointer-events: none;
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: #ffd489;
+    padding: 3px 7px; border-radius: 3px;
+    border: 1px solid rgba(255, 176, 32, .5); background: rgba(10, 6, 2, .8);
+    opacity: 0; transition: opacity .2s; white-space: nowrap;
+  }
+  .locktag.on { opacity: 1; }
+  .locktag.enemy { color: #ffb9ae; border-color: rgba(255, 77, 61, .6); background: rgba(14, 5, 4, .82); }
+  .locktag em { font-style: normal; color: #ff8a3d; }
+
+  /* 屏幕震动时的暗角脉冲 */
+  .flash {
+    position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: 0;
+    background: radial-gradient(circle at 50% 55%, rgba(255, 150, 60, .28), transparent 62%);
+    transition: opacity .18s;
+  }
+  .flash.on { opacity: 1; }
+
+  /* ---------- 启动 / 错误 ---------- */
+  .boot {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    background: radial-gradient(700px 500px at 50% 45%, #0c1410, #04060b 75%);
+    transition: opacity .5s;
+  }
+  .boot.hide { opacity: 0; pointer-events: none; }
+  .spinner { width: 42px; height: 42px; border-radius: 50%; border: 2px solid rgba(154, 178, 106, .18); border-top-color: var(--friend); animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .boot p { margin: 0; font-size: 12px; color: var(--text-dim); letter-spacing: .08em; text-align: center; line-height: 1.7; }
+  .boot .err { color: #ffb4a2; max-width: 560px; font-size: 12.5px; letter-spacing: 0; }
+  .boot .err code { color: #ffd9c9; background: rgba(154, 178, 106, .14); padding: 1px 5px; border-radius: 4px; }
+
+  /* ---------- 响应式 ---------- */
+  @media (max-width: 1180px) {
+    .btn.toggle { display: inline-block; }
+    .panel { top: 106px; bottom: 96px; width: min(320px, 84vw); background: var(--panel-solid); }
+    .panel-left { transform: translateX(calc(-100% - 28px)); }
+    .panel-right { transform: translateX(calc(100% + 28px)); }
+    .panel.open { transform: translateX(0); }
+    .titles p { display: none; }
+    .mission { display: none; }
+    .targetboard { top: 60px; transform: translateX(-50%) scale(.9); }
+    .telemetry { width: 248px; font-size: 9.5px; }
+  }
+  @media (max-width: 860px) {
+    .targetboard { display: none; }
+  }
+  @media (max-width: 620px) {
+    .topbar { padding: 10px 12px; flex-wrap: wrap; }
+    .titles h1 { font-size: 13.5px; }
+    .actions { gap: 6px; }
+    .btn { padding: 7px 10px; font-size: 11px; }
+    .hint { font-size: 10.5px; padding: 7px 10px; gap: 5px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+<svg id="lines" aria-hidden="true"></svg>
+<div id="labels" aria-hidden="true"></div>
+
+<header class="hud topbar">
+  <div class="brand">
+    <div class="logo">FELON-1</div>
+    <div class="titles">
+      <h1>攻击无人机 <span>作战可视化</span></h1>
+      <p>Strike Quadcopter · Scan &amp; Engage · 全部结构由代码生成</p>
+    </div>
+  </div>
+  <div class="actions">
+    <button id="btn-auto" class="btn on">自动交战</button>
+    <button id="btn-fire" class="btn fire">开火 F</button>
+    <button id="btn-missile" class="btn fire">导弹 M</button>
+    <button id="btn-wave" class="btn">新一波次</button>
+    <button id="btn-explode" class="btn">拆解</button>
+    <button id="btn-rotate" class="btn">自动旋转</button>
+    <button id="btn-labels" class="btn on">标注</button>
+    <button id="btn-reset" class="btn">重置视角</button>
+    <button id="btn-parts" class="btn toggle">清单</button>
+    <button id="btn-detail" class="btn toggle">参数</button>
+  </div>
+</header>
+
+<aside id="panel-parts" class="hud panel panel-left">
+  <div class="panel-head"><h2>部件清单</h2><span class="badge" id="parts-count">— 项</span></div>
+  <div class="panel-sub">点击任意部件 → 自动拆解并高亮显示；再次点击同一部件可合拢。</div>
+  <ul class="parts-list" id="parts-list"></ul>
+  <div class="panel-foot">
+    <button id="btn-expand-all" class="btn wide">一键拆解 / 合拢</button>
+    <p class="note">结构与参数依据公开资料整理，为可视化演示用途，非工程图纸。</p>
+  </div>
+</aside>
+
+<aside id="panel-detail" class="hud panel panel-right">
+  <div class="panel-head"><h2>参数说明</h2><span class="badge" id="detail-tag">整机</span></div>
+  <div class="detail-body" id="detail-body"></div>
+</aside>
+
+<div class="hud-layer">
+  <div class="scanline"></div>
+  <div class="hud-corner tl"></div>
+  <div class="hud-corner tr"></div>
+  <div class="reticle"><span></span></div>
+  <div class="flash" id="flash"></div>
+
+  <div class="mission mono">
+    FELON-1 <em>·</em> <b id="m-mode">MODE STANDBY</b> <em>·</em>
+    WAVE <b id="m-wave">1</b> <em>·</em> KILL <b id="m-kill">0</b> <em>·</em>
+    THREAT <b id="m-threat" class="hot">0</b>
+  </div>
+
+  <div class="targetboard" id="targetboard"></div>
+
+  <div class="telemetry mono" id="telemetry-body"></div>
+
+  <div class="radar-wrap">
+    <div class="radar-side">
+      <div>RNG <b id="rd-rng">—</b></div>
+      <div>CONT <b id="rd-cont">00</b></div>
+      <div>AMMO <b id="rd-ammo">—</b></div>
+      <div>MSL <b id="rd-msl">—</b></div>
+    </div>
+    <canvas id="radar" width="156" height="156"></canvas>
+  </div>
+</div>
+
+<div id="hint" class="hud hint">
+  <kbd>左键拖拽</kbd> 旋转<span class="sep">·</span>
+  <kbd>滚轮</kbd> 缩放<span class="sep">·</span>
+  <kbd>右键拖拽</kbd> 平移<span class="sep">·</span>
+  <kbd>点击敌人</kbd> 指定目标<span class="sep">·</span>
+  <kbd>点击部件</kbd> 拆解<span class="sep">·</span>
+  <kbd>F</kbd> 机炮<span class="sep">·</span>
+  <kbd>M</kbd> 导弹<span class="sep">·</span>
+  <kbd>G</kbd> 自动交战<span class="sep">·</span>
+  <kbd>E</kbd> 拆解<span class="sep">·</span>
+  <kbd>R</kbd> 重置
+</div>
+
+<div id="tip" class="tip"></div>
+
+<div id="boot" class="boot">
+  <div class="spinner"></div>
+  <p id="boot-text">正在加载 Three.js 与构建模型…</p>
+</div>
+
+<script>
+/* ---- 启动看门狗：任何异常或资源缺失，都不允许页面一直转圈 ---- */
+(function () {
+  var booted = false;
+  function fail(detail) {
+    if (booted || window.__djiFailed) return;
+    var boot = document.getElementById('boot');
+    if (!boot) return;
+    boot.classList.remove('hide');
+    boot.innerHTML =
+      '<div style="font-size:34px">\u26a0\ufe0e</div>' +
+      '<p class="err"><b>初始化失败</b><br><br>' + (detail || '未知原因') + '<br><br>' +
+      '请确认 <code>engine.js</code>、<code>model-attack.js</code>、<code>combat.js</code>、' +
+      '<code>enemies.js</code>、<code>vendor/three.min.js</code> 与本页面在同一目录下；<br>' +
+      '也可以按 F12 打开控制台，把红色报错发我。</p>';
+  }
+  window.__djiBooted = function () { booted = true; };
+  window.__djiFail = fail;
+  window.addEventListener('error', function (e) {
+    if (booted) return;
+    if (e && e.target && e.target.tagName === 'SCRIPT') {
+      fail('脚本加载失败：' + String(e.target.src || '').split('/').pop());
+    } else if (e && e.message) {
+      fail('脚本报错：' + e.message);
+    }
+  }, true);
+  setTimeout(function () {
+    if (!booted) fail('超过 15 秒仍未完成初始化。');
+  }, 15000);
+})();
+</script>
+<script src="enemies.js" defer></script>
+<script src="model-attack.js" defer></script>
+<script src="combat.js" defer></script>
+<script src="engine.js" defer></script>
+</body>
+</html>

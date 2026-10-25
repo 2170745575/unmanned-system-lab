@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DJI FlyCart 100 物流无人机 · 空吊系统可视化</title>
+<style>
+  :root {
+    --mono: "JetBrains Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+    --sans: "HarmonyOS Sans SC", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    --bg: #05070a;
+    --line: rgba(160, 185, 205, .15);
+    --panel: linear-gradient(160deg, rgba(20, 24, 28, .95), rgba(9, 11, 14, .96));
+    --text: #e2e8ed;
+    --sub: #8c9aa6;
+    --orange: #e8722a;
+    --orange-l: #ff9a4d;
+    --steel: #8a9199;
+    --cyan: #4fd6e8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
+  body { font-family: var(--sans); color: var(--text); -webkit-font-smoothing: antialiased; }
+  #stage { position: fixed; inset: 0; z-index: 1; }
+  #stage canvas { display: block; }
+
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(1200px 720px at 16% 8%, rgba(232, 114, 42, .09), transparent 62%),
+      radial-gradient(900px 640px at 88% 90%, rgba(79, 214, 232, .06), transparent 60%),
+      linear-gradient(180deg, #0a0d11 0%, #05070a 46%, #030507 100%);
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+    background-image:
+      linear-gradient(rgba(160, 190, 210, .035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(160, 190, 210, .035) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(1300px 850px at 50% 42%, #000 28%, transparent 80%);
+  }
+
+  .hud-layer { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+  #lines { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: visible; }
+  #labels { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
+
+  /* ---------- 顶栏 ---------- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 62px; z-index: 6;
+    display: flex; align-items: center; gap: 16px; padding: 0 18px;
+    background: linear-gradient(180deg, rgba(5, 7, 10, .94), rgba(5, 7, 10, .3));
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .brand .mark {
+    width: 38px; height: 38px; border-radius: 9px; position: relative; flex: none;
+    background: linear-gradient(135deg, #2b3036, #15181c);
+    border: 1px solid rgba(232, 114, 42, .55);
+    box-shadow: 0 0 16px rgba(232, 114, 42, .22);
+  }
+  .brand .mark::before, .brand .mark::after {
+    content: ""; position: absolute; background: var(--orange); border-radius: 1px;
+  }
+  .brand .mark::before { left: 50%; top: 9px; width: 5px; height: 20px; margin-left: -2.5px; }
+  .brand .mark::after { top: 50%; left: 9px; height: 5px; width: 20px; margin-top: -2.5px; }
+  .brand h1 { font-size: 15.5px; margin: 0; letter-spacing: .03em; }
+  .brand p { margin: 1px 0 0; font-size: 10px; color: var(--sub); letter-spacing: .16em; font-family: var(--mono); }
+
+  .mission {
+    margin-left: auto; margin-right: auto; display: flex; gap: 16px;
+    font-family: var(--mono); font-size: 11px; color: var(--sub); letter-spacing: .08em;
+  }
+  .mission b { color: var(--orange-l); font-weight: 600; }
+  .mission .m { color: #d8e2e8; }
+
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .btn {
+    pointer-events: auto; font: inherit; font-size: 12px; color: var(--text);
+    padding: 8px 11px; border-radius: 8px; cursor: pointer;
+    border: 1px solid rgba(160, 185, 205, .2);
+    background: rgba(18, 22, 26, .9);
+    transition: border-color .18s, color .18s, background .18s, box-shadow .18s, transform .12s;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: rgba(232, 114, 42, .65); color: #fff; box-shadow: 0 0 15px rgba(232, 114, 42, .2); }
+  .btn:active { transform: translateY(1px); }
+  .btn.on { border-color: rgba(232, 114, 42, .85); color: #1d0f05; background: linear-gradient(135deg, #ffb877, #e8722a); font-weight: 600; }
+  .btn.wide { width: 100%; }
+
+  /* ---------- 面板 ---------- */
+  .panel {
+    position: fixed; top: 78px; bottom: 86px; width: 292px;
+    display: flex; flex-direction: column;
+    border: 1px solid var(--line); border-radius: 14px;
+    background: var(--panel);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .58), inset 0 1px 0 rgba(255, 255, 255, .04);
+    z-index: 6; pointer-events: auto;
+  }
+  #panel-parts { left: 18px; }
+  #panel-detail { right: 18px; }
+  .panel-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px 10px; border-bottom: 1px solid var(--line); }
+  .panel-head h2 { font-size: 13px; margin: 0; letter-spacing: .04em; }
+  .panel-head .count, .panel-head .tag {
+    margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--sub);
+    border: 1px solid var(--line); border-radius: 20px; padding: 2px 9px;
+  }
+  .panel-head .tag { color: var(--orange-l); border-color: rgba(232, 114, 42, .35); }
+
+  #parts-list { list-style: none; margin: 0; padding: 8px; overflow-y: auto; flex: 1; }
+  #parts-list::-webkit-scrollbar, .detail-body::-webkit-scrollbar { width: 7px; }
+  #parts-list::-webkit-scrollbar-thumb, .detail-body::-webkit-scrollbar-thumb { background: rgba(160, 185, 205, .22); border-radius: 4px; }
+  .part-item { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; transition: background .16s, border-color .16s; }
+  .part-item:hover { background: rgba(232, 114, 42, .07); }
+  .part-item.active { background: rgba(232, 114, 42, .13); border-color: rgba(232, 114, 42, .5); }
+  .part-item .idx { font-family: var(--mono); font-size: 10px; color: var(--sub); width: 18px; }
+  .part-item .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c, #6cf); box-shadow: 0 0 9px var(--c, #6cf); flex: none; }
+  .part-item .meta { display: flex; flex-direction: column; min-width: 0; }
+  .part-item .meta b { font-size: 12.5px; font-weight: 600; }
+  .part-item .meta i { font-style: normal; font-size: 10px; color: var(--sub); }
+  .panel-foot { padding: 10px; border-top: 1px solid var(--line); display: flex; gap: 8px; }
+
+  .detail-body { padding: 13px 14px; overflow-y: auto; flex: 1; font-size: 12.5px; line-height: 1.62; }
+  .detail-name { font-size: 17px; font-weight: 700; }
+  .detail-en { font-family: var(--mono); font-size: 10.5px; color: var(--sub); letter-spacing: .1em; margin-top: 2px; }
+  .detail-role { margin: 10px 0 4px; color: #c3d0d8; }
+  .sec-title { font-family: var(--mono); font-size: 10px; letter-spacing: .18em; color: var(--orange-l); margin: 14px 0 7px; padding-bottom: 5px; border-bottom: 1px solid var(--line); }
+  .spec { display: flex; gap: 10px; padding: 4px 0; font-size: 12px; }
+  .spec .k { color: var(--sub); flex: none; width: 84px; }
+  .spec .v { color: #e8eff4; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { font-size: 10.5px; padding: 3px 9px; border-radius: 20px; border: 1px solid var(--line); color: #cfdae2; background: rgba(232, 114, 42, .06); }
+
+  /* ---------- 作业流程板 ---------- */
+  .loadboard {
+    position: fixed; top: 72px; left: 50%; transform: translateX(-50%); z-index: 5;
+    display: flex; align-items: stretch; gap: 6px; padding: 8px 10px; border-radius: 12px;
+    border: 1px solid var(--line); background: rgba(8, 11, 14, .9);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .5); pointer-events: none;
+  }
+  .step {
+    display: flex; align-items: center; gap: 6px; font-size: 11px; font-family: var(--mono);
+    padding: 6px 9px; border-radius: 7px; color: var(--sub); border: 1px solid transparent;
+    background: rgba(255, 255, 255, .02); white-space: nowrap;
+  }
+  .step i {
+    font-style: normal; font-size: 9.5px; width: 15px; height: 15px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid currentColor; opacity: .8;
+  }
+  .step.done { color: #6f8a7c; }
+  .step.on { color: #1d0f05; background: linear-gradient(135deg, #ffb877, #e8722a); border-color: rgba(232, 114, 42, .9); font-weight: 600; }
+  .step.on i { border-color: #1d0f05; }
+  .weigh {
+    display: flex; flex-direction: column; justify-content: center; padding: 0 12px;
+    border-left: 1px solid var(--line); font-family: var(--mono);
+  }
+  .weigh span { font-size: 9px; letter-spacing: .14em; color: var(--sub); }
+  .weigh b { font-size: 14px; color: #eaf2f7; }
+  .weigh b.hot { color: #ff6a5a; }
+  .weigh b.ok { color: #6ee2a0; }
+
+  /* ---------- 遥测 / 雷达 ---------- */
+  .telemetry {
+    position: fixed; left: 18px; bottom: 18px; z-index: 6;
+    font-family: var(--mono); font-size: 10.5px; padding: 10px 12px; border-radius: 5px;
+    border: 1px solid var(--line); border-left: 2px solid rgba(232, 114, 42, .8);
+    background: rgba(6, 8, 11, .92); min-width: 300px;
+  }
+  .telemetry .row { display: flex; gap: 14px; margin: 2px 0; }
+  .telemetry .k { color: var(--sub); letter-spacing: .1em; }
+  .telemetry .v { color: #e4eef4; }
+  .telemetry .v.ok { color: #6ee2a0; }
+  .telemetry .v.hot { color: #ff8a6a; }
+
+  .radar-wrap { position: fixed; right: 18px; bottom: 18px; z-index: 6; display: flex; align-items: center; gap: 12px; pointer-events: none; }
+  #radar {
+    width: 92px; height: 92px; display: block; border-radius: 50%;
+    border: 1px solid rgba(232, 114, 42, .35); background: rgba(6, 8, 11, .78);
+    box-shadow: 0 0 22px rgba(232, 114, 42, .14), inset 0 0 24px rgba(232, 114, 42, .07);
+  }
+  .radar-side { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; color: #d8c0ac; text-align: right; line-height: 1.75; }
+  .radar-side b { color: #ffe0c8; font-weight: 600; }
+
+  .statusline {
+    position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 6;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .05em; color: #ffe0c8;
+    padding: 5px 14px; border-radius: 20px; white-space: nowrap;
+    border: 1px solid rgba(232, 114, 42, .3); background: rgba(8, 10, 13, .88);
+  }
+  .hint {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 6;
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+    font-family: var(--mono); font-size: 10px; color: var(--sub);
+    padding: 8px 14px; border-radius: 20px; border: 1px solid var(--line); background: rgba(6, 8, 11, .9);
+  }
+  .hint kbd { font-family: var(--mono); color: #eaf2f7; background: rgba(232, 114, 42, .13); border: 1px solid rgba(232, 114, 42, .3); border-radius: 4px; padding: 1px 5px; margin-right: 3px; }
+
+  /* ---------- 标注 / 锁定框 ---------- */
+  .label {
+    position: absolute; left: 0; top: 0; will-change: transform;
+    padding: 6px 10px; border-radius: 3px;
+    border: 1px solid rgba(232, 114, 42, .45); border-left: 2px solid rgba(232, 114, 42, .9);
+    background: rgba(6, 8, 11, .92); box-shadow: 0 6px 22px rgba(0, 0, 0, .55);
+    white-space: nowrap; opacity: 0; transition: opacity .28s;
+  }
+  .label.show { opacity: 1; }
+  .label .code { font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; color: rgba(255, 154, 77, .95); }
+  .label b { font-size: 11.5px; font-weight: 600; color: #eef5fa; }
+  .label i { font-style: normal; font-size: 9.5px; color: #c0a68f; letter-spacing: .04em; }
+  .leader { stroke: rgba(232, 114, 42, .55); stroke-width: 1; stroke-dasharray: 3 4; display: block; }
+  .leader.sel { stroke: rgba(255, 154, 77, .95); stroke-dasharray: none; stroke-width: 1.4; }
+
+  .lockbrk { fill: none; stroke: #e8722a; stroke-width: 1.6; stroke-linecap: square; opacity: 0; }
+  .lockbrk.on { opacity: .95; }
+  .lockbrk.enemy { stroke: #4fd6e8; }
+  .lockbox { fill: none; stroke: rgba(232, 114, 42, .35); stroke-width: 1; stroke-dasharray: 5 5; opacity: 0; }
+  .lockbox.on { opacity: 1; }
+  .lockbox.enemy { stroke: rgba(79, 214, 232, .5); }
+  .locktag {
+    position: absolute; left: 0; top: 0; z-index: 5; font-family: var(--mono); font-size: 9.5px;
+    letter-spacing: .06em; color: #ffe0c8; padding: 3px 8px; border-radius: 3px; white-space: nowrap;
+    background: rgba(6, 8, 11, .92); border: 1px solid rgba(232, 114, 42, .45); opacity: 0; transition: opacity .2s;
+  }
+  .locktag.on { opacity: 1; }
+
+  #tip {
+    position: fixed; z-index: 8; transform: translate(12px, -50%);
+    font-size: 11px; font-family: var(--mono); padding: 5px 9px; border-radius: 4px;
+    background: rgba(6, 8, 11, .95); border: 1px solid var(--line); color: #e2eef5;
+    opacity: 0; transition: opacity .15s; pointer-events: none; white-space: nowrap;
+  }
+  #tip.show { opacity: 1; }
+  #tip.threat { color: #ffe0c8; border-color: rgba(232, 114, 42, .5); }
+
+  .reticle {
+    position: fixed; left: 50%; top: 50%; width: 150px; height: 150px; margin: -75px 0 0 -75px;
+    z-index: 2; pointer-events: none; opacity: .45;
+    background:
+      linear-gradient(rgba(232, 114, 42, .5), rgba(232, 114, 42, .5)) center/1px 18px no-repeat,
+      linear-gradient(rgba(232, 114, 42, .5), rgba(232, 114, 42, .5)) center/18px 1px no-repeat;
+  }
+  .reticle::before, .reticle::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1px dashed rgba(232, 114, 42, .18); }
+  .reticle::after { inset: 30px; border-style: solid; border-color: rgba(232, 114, 42, .12); }
+  .hud-corner { position: fixed; width: 90px; height: 90px; z-index: 2; pointer-events: none; opacity: .4; }
+  .hud-corner.tl { left: 12px; top: 74px; border-left: 1px solid var(--orange); border-top: 1px solid var(--orange); }
+  .hud-corner.tr { right: 12px; top: 74px; border-right: 1px solid var(--orange); border-top: 1px solid var(--orange); }
+
+  .scanline {
+    position: fixed; left: 0; right: 0; height: 150px; top: 0; z-index: 3; pointer-events: none;
+    background: linear-gradient(180deg, transparent 0%, rgba(232, 114, 42, .04) 55%, rgba(232, 114, 42, .11) 100%);
+    animation: scanmove 9s linear infinite; will-change: transform;
+  }
+  @keyframes scanmove { 0% { transform: translate3d(0, -160px, 0); } 100% { transform: translate3d(0, 100vh, 0); } }
+
+  #flash {
+    position: fixed; inset: 0; z-index: 7; pointer-events: none; opacity: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(232, 114, 42, .28), transparent 62%);
+    transition: opacity .12s;
+  }
+  #flash.on { opacity: 1; }
+
+  #boot {
+    position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+    background: radial-gradient(900px 620px at 50% 45%, #12100c, #04060a 72%);
+    transition: opacity .45s;
+  }
+  #boot.hide { opacity: 0; pointer-events: none; }
+  #boot p { font-size: 13px; color: #e8c8a8; letter-spacing: .1em; font-family: var(--mono); }
+  #boot p.err { color: #ffb4a6; font-size: 12.5px; line-height: 1.7; max-width: 540px; text-align: center; letter-spacing: 0; }
+  .spinner { width: 42px; height: 42px; border-radius: 50%; border: 2px solid rgba(232, 114, 42, .2); border-top-color: var(--orange); animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+<div class="hud-layer">
+  <div class="reticle"></div>
+  <div class="hud-corner tl"></div>
+  <div class="hud-corner tr"></div>
+  <div class="scanline"></div>
+</div>
+<svg id="lines" xmlns="http://www.w3.org/2000/svg"></svg>
+<div id="labels"></div>
+<div id="tip"></div>
+<div id="flash"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="mark"></div>
+    <div>
+      <h1>DJI FlyCart 100 物流无人机</h1>
+      <p>HEAVY-LIFT OCTOCOPTER · FLAGSHIP WINCH · AUTO ANTI-SWAY</p>
+    </div>
+  </div>
+  <div class="mission">
+    <span>FLYCART 100</span><span>·</span>
+    <span class="m" id="m-mode">MODE HOVER</span><span>·</span>
+    <span>吊次 <b id="m-wave">1</b></span><span>·</span>
+    <span>载荷 <b id="m-kill">0</b> kg</span><span>·</span>
+    <span>摆角 <b id="m-threat">0</b>°</span>
+  </div>
+  <div class="actions">
+    <button class="btn on" id="btn-sway">自动消摆 Z</button>
+    <button class="btn" id="btn-cycle">下一次吊运 V</button>
+    <button class="btn on" id="btn-fold">折叠机臂 X</button>
+    <button class="btn" id="btn-explode">拆解 E</button>
+    <button class="btn" id="btn-rotate">自动旋转</button>
+    <button class="btn on" id="btn-labels">标注</button>
+    <button class="btn" id="btn-parts">部件清单</button>
+    <button class="btn" id="btn-detail">参数说明</button>
+    <button class="btn" id="btn-reset">重置视角</button>
+  </div>
+</header>
+
+<div class="loadboard" id="loadboard"></div>
+
+<aside class="panel" id="panel-parts">
+  <div class="panel-head">
+    <h2>部件清单</h2>
+    <span class="count" id="parts-count">—</span>
+  </div>
+  <ul id="parts-list"></ul>
+  <div class="panel-foot">
+    <button class="btn wide" id="btn-expand-all">一键拆解 / 合拢</button>
+  </div>
+</aside>
+
+<aside class="panel" id="panel-detail">
+  <div class="panel-head">
+    <h2>参数说明</h2>
+    <span class="tag" id="detail-tag">整机</span>
+  </div>
+  <div class="detail-body" id="detail-body"></div>
+</aside>
+
+<div class="telemetry" id="telemetry-body"></div>
+
+<div class="radar-wrap">
+  <div class="radar-side">
+    <div>RNG <b id="rd-rng">—</b></div>
+    <div>CONT <b id="rd-cont">00</b></div>
+    <div>WINCH <b>40 m</b></div>
+    <div>HOOK <b>ELEC</b></div>
+  </div>
+  <canvas id="radar"></canvas>
+</div>
+
+<div class="statusline" id="m-status">待命 · 悬停于 H 型起降平台上方</div>
+
+<div class="hint">
+  <span><kbd>左键拖拽</kbd>旋转</span>
+  <span><kbd>滚轮</kbd>缩放</span>
+  <span><kbd>右键拖拽</kbd>平移</span>
+  <span><kbd>Z</kbd>自动消摆</span>
+  <span><kbd>V</kbd>下一次吊运</span>
+  <span><kbd>X</kbd>机臂展开/折叠</span>
+  <span><kbd>E</kbd>拆解</span>
+  <span><kbd>R</kbd>重置视角</span>
+</div>
+
+<div id="boot">
+  <div class="spinner"></div>
+  <p id="boot-text">正在加载 Three.js…</p>
+</div>
+
+<script>
+  (function () {
+    window.__djiBooted = false;
+    var boot = document.getElementById('boot');
+    function fail(msg) {
+      if (window.__djiBooted || window.__djiFailed) return;
+      window.__djiFailed = true;
+      if (!boot) return;
+      boot.classList.remove('hide');
+      boot.innerHTML = '<div style="font-size:34px">⚠︎</div><p class="err"><b>初始化失败</b><br><br>' +
+        msg + '<br><br>请确认 logistics.js / model-flycart.js / flycart.js / engine.js 与 vendor/three.min.js ' +
+        '都和页面在同一目录，或按 F12 查看控制台报错。</p>';
+    }
+    window.__djiFail = fail;
+    window.addEventListener('error', function (e) {
+      if (e && e.target && e.target.tagName === 'SCRIPT') fail('脚本加载失败：' + (e.target.src || '未知脚本'));
+      else if (e && e.message) fail('脚本错误：' + e.message);
+    }, true);
+    setTimeout(function () { if (!window.__djiBooted) fail('超过 18 秒仍未完成初始化。'); }, 18000);
+  })();
+</script>
+<script src="logistics.js" defer></script>
+<script src="model-flycart.js" defer></script>
+<script src="flycart.js" defer></script>
+<script src="engine.js" defer></script>
+</body>
+</html>

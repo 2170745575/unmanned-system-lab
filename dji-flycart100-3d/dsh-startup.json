@@ -1,0 +1,28 @@
+{
+  "brand": "UNMANNED SYSTEM LAB",
+  "kicker": "LOGISTICS READINESS · SELF-TEST",
+  "title": "DJI FlyCart 100 物流无人机",
+  "subtitle": "HEAVY-LIFT LOGISTICS OCTOCOPTER · 30 PARTS",
+  "tagline": "空吊系统旗舰版 · 实时称重 · 电动开合挂钩 · 自动消摆",
+  "accent": "#ffb020",
+  "accent2": "#4fd6e8",
+  "autoEnterMs": 7000,
+  "music": true,
+  "scanOnEnter": true,
+  "aerial": true,
+  "rotorHint": "prop",
+  "tips": [
+    "T 演示巡航",
+    "B 技术图纸",
+    "U 中英切换",
+    "F 模拟飞行",
+    "S 状态自检"
+  ],
+  "bootLines": [
+    "AIRFRAME INTEGRITY .......... OK",
+    "COAXIAL ROTORS x8 .......... BALANCED",
+    "WINCH DRUM .......... SPOOLED",
+    "LOAD CELL .......... ZEROED",
+    "ANTI-SWAY SYSTEM READY"
+  ]
+}

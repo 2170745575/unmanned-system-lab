@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DJI Mavic 3 Pro · 三摄航拍无人机 · 3D 拆解可视化</title>
+<style>
+  :root {
+    --mono: "JetBrains Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+    --sans: "HarmonyOS Sans SC", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    --bg: #04080c;
+    --line: rgba(140, 190, 220, .16);
+    --panel: linear-gradient(160deg, rgba(12, 20, 28, .95), rgba(7, 12, 18, .95));
+    --text: #dceaf0;
+    --sub: #8ba3ad;
+    --friend: #5fd0f0;
+    --accent2: #6ce0a8;
+    --warm: #ffb020;
+    --hot: #ff8a6a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
+  body {
+    font-family: var(--sans); color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  #stage { position: fixed; inset: 0; z-index: 1; }
+  #stage canvas { display: block; }
+
+  /* ---------- 背景装饰层 ---------- */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(1200px 700px at 18% 12%, rgba(95, 208, 240, .08), transparent 60%),
+      radial-gradient(900px 600px at 88% 86%, rgba(108, 224, 168, .06), transparent 62%),
+      linear-gradient(180deg, #071019 0%, #04080c 45%, #03060a 100%);
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+    background-image:
+      linear-gradient(rgba(150, 200, 220, .035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(150, 200, 220, .035) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(1200px 800px at 50% 45%, #000 30%, transparent 78%);
+  }
+
+  .hud-layer { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
+  #lines { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: visible; }
+  #labels { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
+
+  /* ---------- 顶栏 ---------- */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 62px; z-index: 6;
+    display: flex; align-items: center; gap: 18px; padding: 0 20px;
+    background: linear-gradient(180deg, rgba(4, 9, 13, .92), rgba(4, 9, 13, .35));
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  /* 品牌标记：三摄同轴的镜头组 */
+  .brand .mark {
+    width: 38px; height: 38px; border-radius: 10px; position: relative;
+    background: linear-gradient(135deg, #e9eef2, #a8b4bd);
+    box-shadow: 0 0 18px rgba(95, 208, 240, .32);
+  }
+  .brand .mark::before {
+    content: ""; position: absolute; left: 6px; top: 6px; right: 6px; bottom: 6px;
+    border-radius: 7px; background: #1b2026; border: 1px solid rgba(255, 255, 255, .35);
+  }
+  .brand .mark::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 5px; height: 20px;
+    margin: -10px 0 0 -10px; border-radius: 3px; background: #5fd0f0;
+    box-shadow: 9px 0 0 -1px #9fd8e6, 18px 0 0 -2px #e0523f;
+  }
+  .brand h1 { font-size: 16px; margin: 0; letter-spacing: .04em; }
+  .brand p { margin: 1px 0 0; font-size: 10.5px; color: var(--sub); letter-spacing: .16em; font-family: var(--mono); }
+
+  .mission {
+    margin-left: auto; margin-right: auto; display: flex; gap: 18px;
+    font-family: var(--mono); font-size: 11px; color: var(--sub); letter-spacing: .1em;
+  }
+  .mission b { color: var(--friend); font-weight: 600; }
+  .mission .m { color: #cfe8f0; }
+
+  .actions { display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
+  .btn {
+    pointer-events: auto; font: inherit; font-size: 12px; color: var(--text);
+    padding: 8px 12px; border-radius: 9px; cursor: pointer;
+    border: 1px solid rgba(150, 200, 220, .22);
+    background: rgba(12, 20, 26, .88);
+    transition: border-color .18s, color .18s, background .18s, box-shadow .18s, transform .12s;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+  .btn:hover { border-color: rgba(95, 208, 240, .6); color: #fff; box-shadow: 0 0 16px rgba(95, 208, 240, .2); }
+  .btn:active { transform: translateY(1px); }
+  .btn.on { border-color: rgba(95, 208, 240, .8); color: #04212b; background: linear-gradient(135deg, #b7ecfb, #5fd0f0); font-weight: 600; }
+  .btn.med { border-color: rgba(224, 82, 63, .5); color: #ffd9d4; }
+  .btn.med:hover { border-color: rgba(224, 82, 63, .95); box-shadow: 0 0 18px rgba(224, 82, 63, .3); }
+  .btn.wide { width: 100%; }
+
+  /* ---------- 面板 ---------- */
+  .panel {
+    position: fixed; top: 78px; bottom: 86px; width: 296px;
+    display: flex; flex-direction: column;
+    border: 1px solid var(--line); border-radius: 16px;
+    background: var(--panel);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .04);
+    z-index: 6; pointer-events: auto;
+  }
+  #panel-parts { left: 18px; }
+  #panel-detail { right: 18px; }
+  .panel-head {
+    display: flex; align-items: center; gap: 10px; padding: 13px 15px 11px;
+    border-bottom: 1px solid var(--line);
+  }
+  .panel-head h2 { font-size: 13px; margin: 0; letter-spacing: .05em; }
+  .panel-head .count {
+    margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--sub);
+    border: 1px solid var(--line); border-radius: 20px; padding: 2px 9px;
+  }
+  .panel-head .tag {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: #cfe8f0;
+    border: 1px solid rgba(95, 208, 240, .3); border-radius: 20px; padding: 2px 9px;
+  }
+
+  #parts-list { list-style: none; margin: 0; padding: 8px; overflow-y: auto; flex: 1; }
+  #parts-list::-webkit-scrollbar, .detail-body::-webkit-scrollbar { width: 7px; }
+  #parts-list::-webkit-scrollbar-thumb, .detail-body::-webkit-scrollbar-thumb {
+    background: rgba(140, 190, 220, .22); border-radius: 4px;
+  }
+  .part-item {
+    display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 9px;
+    cursor: pointer; border: 1px solid transparent; transition: background .16s, border-color .16s;
+  }
+  .part-item:hover { background: rgba(95, 208, 240, .07); }
+  .part-item.active { background: rgba(95, 208, 240, .13); border-color: rgba(95, 208, 240, .45); }
+  .part-item .idx { font-family: var(--mono); font-size: 10px; color: var(--sub); width: 18px; }
+  .part-item .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--c, #6cf);
+    box-shadow: 0 0 9px var(--c, #6cf); flex: none;
+  }
+  .part-item .meta { display: flex; flex-direction: column; min-width: 0; }
+  .part-item .meta b { font-size: 12.5px; font-weight: 600; }
+  .part-item .meta i { font-style: normal; font-size: 10px; color: var(--sub); }
+  .panel-foot { padding: 10px; border-top: 1px solid var(--line); }
+
+  .detail-body { padding: 14px 15px; overflow-y: auto; flex: 1; font-size: 12.5px; line-height: 1.62; }
+  .detail-name { font-size: 18px; font-weight: 700; letter-spacing: .02em; }
+  .detail-en { font-family: var(--mono); font-size: 10.5px; color: var(--sub); letter-spacing: .1em; margin-top: 2px; }
+  .detail-role { margin: 11px 0 4px; color: #c3d6de; }
+  .sec-title {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .18em; color: var(--friend);
+    margin: 15px 0 7px; padding-bottom: 5px; border-bottom: 1px solid var(--line);
+  }
+  .spec { display: flex; gap: 10px; padding: 4px 0; font-size: 12px; }
+  .spec .k { color: var(--sub); flex: none; width: 84px; }
+  .spec .v { color: #e6f2f7; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    font-size: 10.5px; padding: 3px 9px; border-radius: 20px;
+    border: 1px solid var(--line); color: #cfe0e8; background: rgba(95, 208, 240, .06);
+  }
+
+  /* ---------- 遥测 / 雷达 ---------- */
+  .telemetry {
+    position: fixed; left: 18px; bottom: 18px; z-index: 6;
+    font-family: var(--mono); font-size: 10.5px; padding: 10px 12px; border-radius: 5px;
+    border: 1px solid var(--line); border-left: 2px solid rgba(95, 208, 240, .75);
+    background: rgba(6, 12, 16, .9); min-width: 250px;
+  }
+  .telemetry .row { display: flex; gap: 16px; margin: 2px 0; }
+  .telemetry .k { color: var(--sub); letter-spacing: .1em; }
+  .telemetry .v { color: #dff0f6; }
+  .telemetry .v.ok { color: var(--accent2); }
+  .telemetry .v.hot { color: var(--hot); }
+
+  .radar-wrap {
+    position: fixed; right: 18px; bottom: 18px; z-index: 6;
+    display: flex; align-items: center; gap: 12px; pointer-events: none;
+  }
+  #radar {
+    width: 92px; height: 92px; display: block;
+    border: 1px solid rgba(95, 208, 240, .35); border-radius: 50%;
+    background: rgba(6, 12, 14, .75);
+    box-shadow: 0 0 22px rgba(95, 208, 240, .14), inset 0 0 24px rgba(95, 208, 240, .07);
+  }
+  .radar-side { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; color: #a8cbd6; text-align: right; line-height: 1.75; }
+  .radar-side b { color: #d9f0f5; font-weight: 600; }
+  .radar-side .w { color: var(--warm); }
+
+  .hint {
+    position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 6;
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+    font-family: var(--mono); font-size: 10px; color: var(--sub);
+    padding: 8px 14px; border-radius: 20px;
+    border: 1px solid var(--line); background: rgba(6, 12, 16, .88);
+  }
+  .hint kbd {
+    font-family: var(--mono); color: #dff0f6; background: rgba(95, 208, 240, .12);
+    border: 1px solid rgba(95, 208, 240, .3); border-radius: 4px; padding: 1px 5px; margin-right: 3px;
+  }
+  .statusline {
+    position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 6;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: #cfeaf2;
+    padding: 5px 14px; border-radius: 20px; white-space: nowrap;
+    border: 1px solid rgba(95, 208, 240, .28); background: rgba(6, 12, 16, .86);
+  }
+
+  /* ---------- 标注 / 锁定框 ---------- */
+  .label {
+    position: absolute; left: 0; top: 0; will-change: transform;
+    padding: 6px 10px; border-radius: 3px;
+    border: 1px solid rgba(95, 208, 240, .4); border-left: 2px solid rgba(95, 208, 240, .8);
+    background: rgba(6, 12, 16, .9);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, .5);
+    white-space: nowrap; opacity: 0; transition: opacity .28s;
+  }
+  .label.show { opacity: 1; }
+  .label .code { font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; color: rgba(95, 208, 240, .9); }
+  .label b { font-size: 11.5px; font-weight: 600; color: #eaf6ff; }
+  .label i { font-style: normal; font-size: 9.5px; color: #8fd6e6; letter-spacing: .04em; }
+  .leader { stroke: rgba(95, 208, 240, .55); stroke-width: 1; stroke-dasharray: 3 4; display: block; }
+  .leader.sel { stroke: rgba(108, 224, 168, .95); stroke-dasharray: none; stroke-width: 1.4; }
+
+  .lockbrk { fill: none; stroke: #5fd0f0; stroke-width: 1.6; stroke-linecap: square; opacity: 0; }
+  .lockbrk.on { opacity: .95; }
+  .lockbrk.enemy { stroke: #e0523f; }
+  .lockbrk.dead { stroke: #7a8489; }
+  .lockbox { fill: none; stroke: rgba(95, 208, 240, .3); stroke-width: 1; stroke-dasharray: 5 5; opacity: 0; }
+  .lockbox.on { opacity: 1; }
+  .lockbox.enemy { stroke: rgba(224, 82, 63, .45); }
+  .locktag {
+    position: absolute; left: 0; top: 0; z-index: 5;
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: .06em; color: #d9f0f5;
+    padding: 3px 8px; border-radius: 3px; white-space: nowrap;
+    background: rgba(6, 12, 16, .9); border: 1px solid rgba(95, 208, 240, .4);
+    opacity: 0; transition: opacity .2s;
+  }
+  .locktag.on { opacity: 1; }
+  .locktag.enemy { color: #ffd9d4; border-color: rgba(224, 82, 63, .5); }
+
+  #tip {
+    position: fixed; z-index: 8; transform: translate(12px, -50%);
+    font-size: 11px; font-family: var(--mono); padding: 5px 9px; border-radius: 4px;
+    background: rgba(6, 12, 16, .94); border: 1px solid var(--line);
+    color: #d9eef5; opacity: 0; transition: opacity .15s; pointer-events: none; white-space: nowrap;
+  }
+  #tip.show { opacity: 1; }
+
+  .reticle {
+    position: fixed; left: 50%; top: 50%; width: 150px; height: 150px; margin: -75px 0 0 -75px;
+    z-index: 2; pointer-events: none; opacity: .5;
+    background:
+      linear-gradient(rgba(95, 208, 240, .5), rgba(95, 208, 240, .5)) center/1px 18px no-repeat,
+      linear-gradient(rgba(95, 208, 240, .5), rgba(95, 208, 240, .5)) center/18px 1px no-repeat;
+  }
+  .reticle::before, .reticle::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    border: 1px dashed rgba(95, 208, 240, .18);
+  }
+  .reticle::after { inset: 30px; border-style: solid; border-color: rgba(95, 208, 240, .12); }
+
+  .hud-corner { position: fixed; width: 90px; height: 90px; z-index: 2; pointer-events: none; opacity: .45; }
+  .hud-corner.tl { left: 12px; top: 74px; border-left: 1px solid var(--friend); border-top: 1px solid var(--friend); }
+  .hud-corner.tr { right: 12px; top: 74px; border-right: 1px solid var(--friend); border-top: 1px solid var(--friend); }
+
+  .scanline {
+    position: fixed; left: 0; right: 0; height: 150px; top: 0; z-index: 3; pointer-events: none;
+    background: linear-gradient(180deg, transparent 0%, rgba(95, 208, 240, .04) 55%, rgba(95, 208, 240, .1) 100%);
+    animation: scanmove 9s linear infinite; will-change: transform;
+  }
+  @keyframes scanmove {
+    0% { transform: translate3d(0, -160px, 0); }
+    100% { transform: translate3d(0, 100vh, 0); }
+  }
+
+  #flash {
+    position: fixed; inset: 0; z-index: 7; pointer-events: none; opacity: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(95, 208, 240, .26), transparent 62%);
+    transition: opacity .12s;
+  }
+  #flash.on { opacity: 1; }
+
+  /* ---------- 启动遮罩 ---------- */
+  #boot {
+    position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+    background: radial-gradient(900px 600px at 50% 45%, #08131b, #03060a 70%);
+    transition: opacity .45s;
+  }
+  #boot.hide { opacity: 0; pointer-events: none; }
+  #boot p { font-size: 13px; color: #8fd6e6; letter-spacing: .1em; font-family: var(--mono); }
+  #boot p.err { color: #ffb4a6; font-size: 12.5px; line-height: 1.7; max-width: 520px; text-align: center; letter-spacing: 0; }
+  .spinner {
+    width: 42px; height: 42px; border-radius: 50%;
+    border: 2px solid rgba(95, 208, 240, .18); border-top-color: var(--friend);
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+<div class="hud-layer">
+  <div class="reticle"></div>
+  <div class="hud-corner tl"></div>
+  <div class="hud-corner tr"></div>
+  <div class="scanline"></div>
+</div>
+<svg id="lines" xmlns="http://www.w3.org/2000/svg"></svg>
+<div id="labels"></div>
+<div id="tip"></div>
+<div id="flash"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="mark"></div>
+    <div>
+      <h1>DJI Mavic 3 Pro · 三摄航拍无人机</h1>
+      <p>MAVIC 3 PRO · TRIPLE CAMERA · O3+ · APAS 5.0</p>
+    </div>
+  </div>
+  <div class="mission">
+    <span>MAVIC 3 PRO</span><span>·</span>
+    <span class="m" id="m-mode">MODE STANDBY</span><span>·</span>
+    <span>镜组 <b id="m-wave">3</b></span><span>·</span>
+    <span>桨叶 <b id="m-kill">4</b></span><span>·</span>
+    <span>部件 <b id="m-threat">23</b></span>
+  </div>
+  <div class="actions">
+    <button class="btn" id="btn-parts">部件清单</button>
+    <button class="btn" id="btn-detail">参数说明</button>
+    <button class="btn" id="btn-explode">拆解</button>
+    <button class="btn" id="btn-rotate">自动旋转</button>
+    <button class="btn on" id="btn-labels">标注</button>
+    <button class="btn" id="btn-reset">重置视角</button>
+  </div>
+</header>
+
+<aside class="panel" id="panel-parts">
+  <div class="panel-head">
+    <h2 id="panel-parts-title">部件清单</h2>
+    <span class="count" id="parts-count">—</span>
+  </div>
+  <ul id="parts-list"></ul>
+  <div class="panel-foot">
+    <button class="btn wide" id="btn-expand-all">一键拆解 / 合拢</button>
+  </div>
+</aside>
+
+<aside class="panel" id="panel-detail">
+  <div class="panel-head">
+    <h2 id="panel-detail-title">参数说明</h2>
+    <span class="tag" id="detail-tag">整机</span>
+  </div>
+  <div class="detail-body" id="detail-body"></div>
+</aside>
+
+<div class="telemetry" id="telemetry-body"></div>
+
+<div class="radar-wrap">
+  <div class="radar-side">
+    <div>RNG <b id="rd-rng">—</b></div>
+    <div>CONT <b id="rd-cont">00</b></div>
+    <div>CAM <b>3</b></div>
+    <div>LINK <b>O3+</b></div>
+  </div>
+  <canvas id="radar"></canvas>
+</div>
+
+<div class="statusline" id="m-status">待命 · 整机就绪</div>
+
+<div class="hint">
+  <span><kbd>左键拖拽</kbd>旋转</span>
+  <span><kbd>滚轮</kbd>缩放</span>
+  <span><kbd>右键拖拽</kbd>平移</span>
+  <span><kbd>点击部件</kbd>查看结构</span>
+  <span><kbd>E</kbd>拆解</span>
+  <span><kbd>R</kbd>重置视角</span>
+</div>
+
+<div id="boot">
+  <div class="spinner"></div>
+  <p id="boot-text">正在加载 Three.js…</p>
+</div>
+
+<script>
+  /* 启动看门狗：任何脚本报错 / 404 / 超时都直接把原因显示出来，绝不一直转圈 */
+  (function () {
+    window.__djiBooted = false;
+    var boot = document.getElementById('boot');
+    var txt = document.getElementById('boot-text');
+    function fail(msg) {
+      if (window.__djiBooted || window.__djiFailed) return;
+      window.__djiFailed = true;
+      if (!boot) return;
+      boot.classList.remove('hide');
+      boot.innerHTML = '<div style="font-size:34px">⚠︎</div><p class="err"><b>初始化失败</b><br><br>' +
+        msg + '<br><br>请确认 model-mavic.js / engine.js / dsh-startup.js 与 vendor/three.min.js ' +
+        '都和页面在同一目录，或按 F12 查看控制台报错。</p>';
+    }
+    window.__djiFail = fail;
+    window.addEventListener('error', function (e) {
+      if (e && e.target && e.target.tagName === 'SCRIPT') {
+        fail('脚本加载失败：' + (e.target.src || '未知脚本'));
+      } else if (e && e.message) {
+        fail('脚本错误：' + e.message);
+      }
+    }, true);
+    setTimeout(function () {
+      if (!window.__djiBooted) fail('超过 18 秒仍未初始化。');
+    }, 18000);
+  })();
+</script>
+<!-- 加载顺序（均为 defer，按文档顺序执行）：机型模块 → 引擎（引擎必须最后） -->
+<script src="model-mavic.js" defer></script>
+<script src="engine.js" defer></script>
+</body>
+</html>

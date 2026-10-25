@@ -1,0 +1,25 @@
+/* dsh-startup.js —— dsh-startup.json 的 file:// 孪生文件（内容保持一致）*/
+window.DSH_STARTUP = {
+  "brand": "UNMANNED SYSTEM LAB",
+  "kicker": "IMAGING UNIT · TEARDOWN",
+  "title": "DJI Action 4 运动相机",
+  "subtitle": "ACTION CAMERA · 18-PART TEARDOWN",
+  "tagline": "镜头模组 · 传感器 · 双屏 · 磁吸快拆",
+  "accent": "#5fd0f0",
+  "accent2": "#6ce0a8",
+  "autoEnterMs": 7000,
+  "music": true,
+  "scanOnEnter": true,
+  "aerial": false,
+  "tips": [
+    "点击部件拆解",
+    "S 状态自检"
+  ],
+  "bootLines": [
+    "UNIT INTEGRITY .......... OK",
+    "SENSOR 1/1.3 INCH .......... ONLINE",
+    "DUAL DISPLAY .......... ACTIVE",
+    "MAGNETIC MOUNT .......... READY",
+    "IMAGING UNIT READY"
+  ]
+};
