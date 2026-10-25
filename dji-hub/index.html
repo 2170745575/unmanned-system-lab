@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UNMANNED SYSTEM LAB · 无人系统可视化套件</title>
+<style>
+  :root {
+    --mono: "JetBrains Mono", "Cascadia Mono", Consolas, "Courier New", monospace;
+    --sans: "HarmonyOS Sans SC", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    --bg: #03060a;
+    --line: rgba(150, 200, 220, .13);
+    --card: linear-gradient(165deg, rgba(17, 25, 32, .92), rgba(7, 11, 15, .95));
+    --text: #e2edf3;
+    --sub: #8ba3ad;
+    --green: #6ce0a8;
+    --cyan: #5fd0f0;
+    --amber: #ffb020;
+    --red: #ff6a5a;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
+    font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(1200px 760px at 14% -8%, rgba(108, 224, 168, .1), transparent 62%),
+      radial-gradient(1000px 700px at 90% 6%, rgba(95, 208, 240, .09), transparent 60%),
+      radial-gradient(900px 700px at 50% 112%, rgba(255, 106, 90, .07), transparent 62%),
+      linear-gradient(180deg, #061016 0%, #04070a 42%, #02050a 100%);
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+    background-image:
+      linear-gradient(rgba(140, 200, 220, .028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(140, 200, 220, .028) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(1500px 950px at 50% 26%, #000 24%, transparent 82%);
+  }
+  .wrap { position: relative; z-index: 2; max-width: 1460px; margin: 0 auto; padding: 0 30px 100px; }
+
+  nav {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; gap: 18px; padding: 15px 0;
+    background: linear-gradient(180deg, rgba(3, 6, 10, .96), rgba(3, 6, 10, .5) 68%, transparent);
+    backdrop-filter: blur(7px);
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo .rotor { width: 34px; height: 34px; position: relative; flex: none; }
+  .logo .rotor i {
+    position: absolute; inset: 0; border: 1.6px solid var(--green); border-radius: 50%;
+    border-right-color: transparent; border-bottom-color: transparent; animation: spin 3.2s linear infinite;
+  }
+  .logo .rotor i:nth-child(2) { inset: 7px; border-color: var(--cyan); border-left-color: transparent; border-top-color: transparent; animation-duration: 2.1s; animation-direction: reverse; }
+  .logo .rotor b { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px var(--green); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .logo h1 { margin: 0; font-size: 16.5px; letter-spacing: .04em; }
+  .logo p { margin: 2px 0 0; font-family: var(--mono); font-size: 9.5px; letter-spacing: .2em; color: var(--sub); }
+  nav .navlinks { margin-left: 26px; display: flex; gap: 18px; font-size: 12.5px; }
+  nav .navlinks a { color: var(--sub); text-decoration: none; transition: color .18s; }
+  nav .navlinks a:hover { color: #fff; }
+  nav .right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  nav .meta { font-family: var(--mono); font-size: 10.5px; color: var(--sub); letter-spacing: .1em; }
+  nav .meta b { color: var(--green); }
+  .langbtn {
+    font: inherit; font-family: var(--mono); font-size: 11px; cursor: pointer;
+    padding: 5px 11px; border-radius: 16px; color: var(--text);
+    border: 1px solid var(--line); background: rgba(14, 22, 28, .85); transition: all .18s;
+  }
+  .langbtn:hover { border-color: rgba(108, 224, 168, .6); color: #fff; }
+  #musicbtn { font-size: 13px; min-width: 38px; }
+  #musicbtn.on { border-color: rgba(108, 224, 168, .85); color: #05231a;
+    background: linear-gradient(135deg, #a8f0d8, #6ce0a8); }
+
+  .hero { position: relative; padding: 54px 0 26px; min-height: 580px; }
+  #heroCanvas {
+    position: absolute; left: -40px; top: -60px; width: calc(100% + 80px); height: calc(100% + 110px);
+    z-index: 0; opacity: .95; pointer-events: none;
+  }
+  .hero .inner { position: relative; z-index: 1; }
+  .kicker {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .3em; color: var(--green);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .kicker::before { content: ""; width: 40px; height: 1px; background: var(--green); opacity: .65; }
+  .kicker .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  .hero h2 { margin: 20px 0 14px; font-size: clamp(29px, 4.4vw, 54px); line-height: 1.1; letter-spacing: -.012em; max-width: 880px; }
+  .hero h2 em {
+    font-style: normal; color: transparent;
+    background: linear-gradient(118deg, #6ce0a8, #5fd0f0 48%, #ffb020);
+    -webkit-background-clip: text; background-clip: text;
+  }
+  .hero p.lead { margin: 0; max-width: 740px; font-size: 14.5px; line-height: 1.9; color: #b9cad3; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+  .cta a {
+    text-decoration: none; font-size: 13.5px; padding: 12px 22px; border-radius: 11px;
+    border: 1px solid rgba(108, 224, 168, .5); color: #c9f5e4; background: rgba(108, 224, 168, .07);
+    transition: all .2s;
+  }
+  .cta a.primary { border-color: rgba(108, 224, 168, .9); color: #05231a; font-weight: 600; background: linear-gradient(135deg, #a8f0d8, #6ce0a8); }
+  .cta a:hover { transform: translateY(-2px); box-shadow: 0 12px 30px rgba(108, 224, 168, .2); }
+  .stats { display: flex; flex-wrap: wrap; gap: 34px; margin-top: 44px; }
+  .stat { border-left: 1px solid var(--line); padding-left: 16px; }
+  .stat b { display: block; font-size: 27px; font-family: var(--mono); letter-spacing: -.02em; }
+  .stat span { font-size: 10.5px; color: var(--sub); letter-spacing: .14em; font-family: var(--mono); }
+
+  section { padding-top: 74px; }
+  .sec-head { display: flex; align-items: flex-end; gap: 18px; margin-bottom: 26px; flex-wrap: wrap; }
+  .sec-head .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .3em; color: var(--green); }
+  .sec-head h3 { margin: 6px 0 0; font-size: 25px; letter-spacing: -.01em; }
+  .sec-head p { margin: 0 0 3px; color: var(--sub); font-size: 13px; max-width: 620px; line-height: 1.75; }
+
+  .chain { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(228px, 1fr)); }
+  .link {
+    position: relative; padding: 18px 18px 22px; border-radius: 15px; overflow: hidden;
+    border: 1px solid var(--line); background: var(--card); text-decoration: none; color: inherit;
+    transition: transform .26s cubic-bezier(.2,.7,.3,1), border-color .26s, box-shadow .26s;
+  }
+  .link:hover { transform: translateY(-4px); border-color: rgba(108, 224, 168, .42); box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .link .step { font-family: var(--mono); font-size: 10px; letter-spacing: .22em; color: var(--sub); }
+  .link h4 { margin: 10px 0 6px; font-size: 17px; }
+  .link small { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; color: var(--sub); }
+  .link p { margin: 10px 0 0; font-size: 12px; line-height: 1.7; color: #a9bcc6; }
+  .link .bar { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+  .link.attack .bar { background: linear-gradient(180deg, #ff6a5a, transparent); }
+  .link.medical .bar { background: linear-gradient(180deg, #6ce0a8, transparent); }
+  .link.logistics .bar { background: linear-gradient(180deg, #ffb020, transparent); }
+  .link.recon .bar { background: linear-gradient(180deg, #5fd0f0, transparent); }
+  .link .go { position: absolute; right: 16px; bottom: 15px; font-family: var(--mono); font-size: 11px; color: var(--green); opacity: .8; }
+
+  .grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+  .card {
+    position: relative; display: flex; flex-direction: column; overflow: hidden;
+    border: 1px solid var(--line); border-radius: 18px; background: var(--card);
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    transition: transform .28s cubic-bezier(.2,.7,.3,1), border-color .28s, box-shadow .28s;
+  }
+  .card:hover { transform: translateY(-5px); border-color: rgba(108, 224, 168, .45); box-shadow: 0 28px 72px rgba(0,0,0,.62); }
+  .card.minor .thumb { height: 186px; }
+  .card .thumb {
+    position: relative; height: 214px; overflow: hidden;
+    background: radial-gradient(420px 250px at 50% 108%, rgba(108, 224, 168, .1), transparent 70%), linear-gradient(180deg, #071016, #040a0e);
+    border-bottom: 1px solid var(--line);
+  }
+  .card .thumb img { width: 100%; height: 100%; object-fit: contain; display: block; padding: 14px; transition: transform .55s cubic-bezier(.2,.7,.3,1); }
+  .card:hover .thumb img { transform: scale(1.06); }
+  .card .thumb .scan { position: absolute; inset: 0; pointer-events: none; opacity: .55;
+    background: linear-gradient(180deg, transparent, rgba(108,224,168,.13) 50%, transparent);
+    transform: translateY(-100%); transition: transform .95s ease; }
+  .card:hover .thumb .scan { transform: translateY(100%); }
+  .card .thumb .code { position: absolute; left: 14px; top: 12px; font-family: var(--mono); font-size: 10px; letter-spacing: .18em; color: var(--green); text-shadow: 0 0 12px rgba(108,224,168,.5); }
+  .card .thumb .cat { position: absolute; right: 12px; top: 11px; font-family: var(--mono); font-size: 10px; letter-spacing: .12em; padding: 3px 10px; border-radius: 20px; border: 1px solid currentColor; opacity: .92; }
+  .cat.attack { color: var(--red); } .cat.medical { color: var(--green); }
+  .cat.logistics { color: var(--amber); } .cat.recon { color: var(--cyan); }
+  .card .body { padding: 16px 18px 18px; display: flex; flex-direction: column; flex: 1; }
+  .card h3 { margin: 0; font-size: 17.5px; }
+  .card .en { font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em; color: var(--sub); margin-top: 3px; }
+  .card .desc { margin: 12px 0 0; font-size: 12.5px; line-height: 1.72; color: #b0c2cc; }
+  .card ul.specs { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 5px; }
+  .card ul.specs li { display: flex; gap: 10px; font-size: 11.5px; font-family: var(--mono); }
+  .card ul.specs .k { color: var(--sub); width: 82px; flex: none; }
+  .card ul.specs .v { color: #dbeaf1; }
+  .card .modes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  .mode { font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em; padding: 3px 9px; border-radius: 20px;
+    border: 1px solid rgba(108, 224, 168, .3); color: #9fe8c8; background: rgba(108, 224, 168, .07); }
+  .card .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; padding-top: 18px; }
+  .card .acts a {
+    text-align: center; text-decoration: none; font-size: 12px; padding: 9px 8px; border-radius: 9px;
+    border: 1px solid var(--line); color: var(--text); background: rgba(14, 22, 28, .82); transition: all .18s;
+  }
+  .card .acts a:hover { border-color: rgba(108, 224, 168, .6); color: #fff; box-shadow: 0 0 16px rgba(108, 224, 168, .16); }
+  .card .acts a.primary { grid-column: span 2; border-color: rgba(108, 224, 168, .85); color: #05231a; font-weight: 600;
+    background: linear-gradient(135deg, #a8f0d8, #6ce0a8); }
+  .card .acts a.amber { border-color: rgba(255, 176, 32, .5); color: #ffe0a8; }
+  .card .acts a.amber:hover { border-color: rgba(255, 176, 32, .95); box-shadow: 0 0 16px rgba(255, 176, 32, .22); }
+
+  .feats { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .feat { padding: 18px; border-radius: 14px; border: 1px solid var(--line); background: rgba(10, 16, 21, .72); }
+  .feat .ic { font-family: var(--mono); font-size: 11px; color: var(--green); letter-spacing: .16em; }
+  .feat h4 { margin: 10px 0 7px; font-size: 15px; }
+  .feat p { margin: 0; font-size: 12px; line-height: 1.75; color: #a9bcc6; }
+
+  footer { margin-top: 76px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--sub); font-size: 11.5px; line-height: 2; }
+  footer code { font-family: var(--mono); color: #9fe8c8; }
+  #boot2 {
+    position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+    background: #03060a; transition: opacity .6s; font-family: var(--mono); font-size: 12px; color: var(--green);
+    letter-spacing: .28em;
+  }
+  #boot2.hide { opacity: 0; pointer-events: none; }
+  #boot2 .boot-inner { text-align: center; }
+  #boot2 .boot-brand { font-size: 13px; letter-spacing: .42em; color: var(--green); }
+  #boot2 .boot-log { margin-top: 20px; min-height: 96px; text-align: left; display: inline-block; }
+  #boot2 .boot-log div { display: flex; gap: 9px; align-items: center; opacity: 0;
+    transform: translateX(-6px); transition: opacity .4s, transform .4s;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; color: #8ba3ad; padding: 3px 0; }
+  #boot2 .boot-log div.in { opacity: 1; transform: none; }
+  #boot2 .boot-log i { color: var(--cyan); font-style: normal; text-shadow: 0 0 10px rgba(95,208,240,.7); }
+</style>
+</head>
+<body>
+
+<div id="boot2">
+  <div class="boot-inner">
+    <div class="boot-brand" id="boot-brand">UNMANNED SYSTEM LAB</div>
+    <div class="boot-log" id="boot-log"></div>
+  </div>
+</div>
+
+<div class="wrap">
+  <nav>
+    <div class="logo">
+      <div class="rotor"><i></i><i></i><b></b></div>
+      <div>
+        <h1 id="t-brand">无人系统可视化套件</h1>
+        <p>UNMANNED SYSTEM LAB · THREE.JS</p>
+      </div>
+    </div>
+    <div class="navlinks">
+      <a href="#system" id="t-nav1">体系链路</a>
+      <a href="#fleet" id="t-nav2">在库机型</a>
+      <a href="#tech" id="t-nav3">技术实现</a>
+    </div>
+    <div class="right">
+      <span class="meta"><span id="t-navfleet">机型</span> <b id="nav-count">5</b> · <span id="t-navparts">部件</span> <b id="nav-parts">0</b></span>
+      <button class="langbtn" id="musicbtn" title="音乐">🔊</button>
+      <button class="langbtn" id="langbtn">EN</button>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <canvas id="heroCanvas"></canvas>
+    <div class="inner">
+      <div class="kicker"><span class="dot"></span><span id="t-kicker">全流程由代码生成 · 无外部模型与贴图</span></div>
+      <h2 id="t-h2"></h2>
+      <p class="lead" id="t-lead"></p>
+      <div class="cta">
+        <a class="primary" id="t-cta1" href="../dji-felon-attack/index.html?mode=tour"></a>
+        <a id="t-cta2" href="#system"></a>
+        <a id="t-cta3" href="../dji-medical-3d/index.html?mode=blueprint"></a>
+      </div>
+      <div class="stats" id="stats"></div>
+    </div>
+  </header>
+
+  <section id="system">
+    <div class="sec-head">
+      <div>
+        <div class="k">SYSTEM OF SYSTEMS</div>
+        <h3 id="t-sys"></h3>
+      </div>
+      <p id="t-sysp"></p>
+    </div>
+    <div class="chain" id="chain"></div>
+  </section>
+
+  <section id="fleet">
+    <div class="sec-head">
+      <div>
+        <div class="k">FLEET</div>
+        <h3 id="t-fleet"></h3>
+      </div>
+      <p id="t-fleetp"></p>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section id="tech">
+    <div class="sec-head">
+      <div>
+        <div class="k">ENGINEERING</div>
+        <h3 id="t-tech"></h3>
+      </div>
+      <p id="t-techp"></p>
+    </div>
+    <div class="feats" id="feats"></div>
+  </section>
+
+  <footer>
+    <div id="t-foot1"></div>
+    <div id="t-foot2"></div>
+    <div id="t-foot3"></div>
+    <div style="margin-top:12px;opacity:.7" id="t-foot4"></div>
+  </footer>
+</div>
+
+<script>
+var FLEET = [
+  {
+    code: 'FELON-1', cat: 'attack', tier: 1, parts: 24,
+    dir: '../dji-felon-attack/index.html', thumb: 'assets/felon.png',
+    cn: { name: 'FELON-1 攻击无人机', en: 'ARMED STRIKE QUADCOPTER', cat: '攻击',
+      desc: '24 个部件的武装四旋翼：30mm 机炮、弹鼓、后坐缓冲器、双联导弹挂架与光电吊舱。作战模拟包含雷达扫描 → 威胁识别 → 目标锁定 → 炮塔随动开火 / 精确制导弹药打击 → 波次推进与战损统计。',
+      specs: [['部件', '24 个'], ['武器', '机炮 60 发 + 弹药 2 枚'], ['模拟', '扫描 / 锁定 / 交战']] },
+    en2: { name: 'FELON-1 Strike UAV', en: 'ARMED STRIKE QUADCOPTER', cat: 'ATTACK',
+      desc: 'A 24-part armed quadcopter: 30 mm autocannon, ammunition drum, recoil damper, twin munition pylons and EO/IR turret. The combat simulation runs radar sweep → threat ID → lock-on → turret tracking with gun or guided-munition strikes, wave progression and damage reporting.',
+      specs: [['Parts', '24'], ['Weapon', '30 mm gun + 2 munitions'], ['Sim', 'Scan / Lock / Engage']] }
+  },
+  {
+    code: 'MEDEVAC-1', cat: 'medical', tier: 1, parts: 30,
+    dir: '../dji-medical-3d/index.html', thumb: 'assets/medevac.png',
+    cn: { name: 'MEDEVAC-1 大型医疗救援无人机', en: 'LARGE MEDICAL EVACUATION UAV', cat: '医疗',
+      desc: '3 米级六旋翼医疗平台、30 个部件：增压医疗舱、折叠担架、生命维持、血液冷藏、监护除颤、绞盘吊救与可抛投物资舱。救护模拟包含生命探测扫描、伤情分诊定级、物资投送与绞盘吊救后送，伤员生命体征实时推演。',
+      specs: [['部件', '30 个'], ['载荷', '伤员 1 名 / 物资 120 kg'], ['模拟', '探测 / 分诊 / 救护']] },
+    en2: { name: 'MEDEVAC-1 Medical UAV', en: 'LARGE MEDICAL EVACUATION UAV', cat: 'MEDICAL',
+      desc: 'A 3-metre class hexacopter with 30 parts: pressurised medical cabin, folding stretcher, life support, blood refrigerator, monitor/defibrillator, winch hoist and an air-droppable supply pod. The rescue simulation covers life-detection scanning, triage classification, supply delivery and hoist evacuation with live vitals.',
+      specs: [['Parts', '30'], ['Payload', '1 casualty / 120 kg'], ['Sim', 'Detect / Triage / Rescue']] }
+  },
+  {
+    code: 'FLYCART 100', cat: 'logistics', tier: 1, parts: 30,
+    dir: '../dji-flycart100-3d/index.html', thumb: 'assets/flycart.png',
+    cn: { name: 'DJI FlyCart 100 物流无人机', en: 'HEAVY-LIFT LOGISTICS OCTOCOPTER', cat: '物流',
+      desc: '3 米级八旋翼重载平台（4 臂 × 共轴双桨）、30 个部件：碳纤维机身、空吊系统旗舰版（绞盘 40 m + 实时称重 + 电动开合挂钩 + 自动消摆）、可拆货运包装箱、激光雷达 / 下视雷达 / 四目视觉 / FPV / 双 RTK。演示吊装 → 称重 → 起吊爬升 → 消摆运输 → 精准投放全流程。',
+      specs: [['部件', '30 个'], ['最大载重', '100 kg'], ['模拟', '吊装 / 称重 / 投放']] },
+    en2: { name: 'DJI FlyCart 100 Logistics UAV', en: 'HEAVY-LIFT LOGISTICS OCTOCOPTER', cat: 'LOGISTICS',
+      desc: 'A 3-metre class octocopter (4 arms × coaxial rotors) with 30 parts: carbon-fibre airframe, flagship winch system (40 m cable, real-time weighing, electric hook, active anti-sway), removable cargo box, LiDAR, downward radar, quad vision, FPV and dual RTK. The demo covers hook-up, weighing, lift-off, anti-sway transit and precision release.',
+      specs: [['Parts', '30'], ['Max payload', '100 kg'], ['Sim', 'Hook / Weigh / Release']] }
+  },
+  {
+    code: 'MAVIC 3 PRO', cat: 'recon', tier: 2, parts: 23,
+    dir: '../dji-mavic3pro-3d/index.html', thumb: 'assets/mavic3.png',
+    cn: { name: 'DJI Mavic 3 Pro', en: 'TRIPLE-CAMERA RECON DRONE', cat: '侦察',
+      desc: '23 个部件的三摄旗舰航拍机：主摄 / 中长焦 / 长焦三摄云台、折叠机臂、电池与散热风道，带战术 HUD 叠加（锁定框、遥测、迷你雷达与扫描环）；与体系机型同一套引擎：后期泛光、演示巡航、技术图纸模式、中英双语、模拟飞行与航行灯。',
+      specs: [['部件', '23 个'], ['相机', '三摄云台'], ['图传', 'O3+ / 15 km']] },
+    en2: { name: 'DJI Mavic 3 Pro', en: 'TRIPLE-CAMERA RECON DRONE', cat: 'RECON',
+      desc: 'A 23-part triple-camera flagship: wide / medium-tele / tele gimbal, folding arms, battery and cooling ducts, with a tactical HUD overlay (lock brackets, telemetry, mini radar and scan ring).',
+      specs: [['Parts', '23'], ['Camera', 'Triple gimbal'], ['Link', 'O3+ / 15 km']] }
+  },
+  {
+    code: 'ACTION 4', cat: 'recon', tier: 2, parts: 18,
+    dir: '../dji-action4-3d/index.html', thumb: 'assets/action4.png',
+    cn: { name: 'DJI Action 4 运动相机', en: 'ACTION CAMERA · FULL TEARDOWN', cat: '影像',
+      desc: '18 个部件级拆解：镜头模组、1/1.3" 传感器、机身中框、双屏、磁吸快拆与电池主板，与其余机型统一到同一套引擎：后期泛光、演示巡航、技术图纸模式、中英双语；非飞行器，不启用模拟飞行与航行灯。',
+      specs: [['部件', '18 个'], ['传感器', '1/1.3" 方形'], ['视频', '4K/120fps']] },
+    en2: { name: 'DJI Action 4', en: 'ACTION CAMERA · FULL TEARDOWN', cat: 'IMAGING',
+      desc: 'An 18-part teardown: lens module, 1/1.3" sensor, chassis, dual screens, magnetic quick-release, battery and mainboard — unified onto the same engine as the rest: bloom post-processing, showreel, blueprint mode and CN/EN switch; it is not an aircraft, so hover flight and navigation lights stay off.',
+      specs: [['Parts', '18'], ['Sensor', '1/1.3"'], ['Video', '4K/120fps']] }
+  }
+];
+
+var CHAIN = [
+  { step: 'STEP 01', code: 'MAVIC 3 PRO', cls: 'recon', dir: '../dji-mavic3pro-3d/index.html?mode=tour',
+    cn: { t: '侦察感知', s: 'ISR / SENSING', d: '三摄云台与战术 HUD：先看见，再决定。' },
+    en2: { t: 'Reconnaissance', s: 'ISR / SENSING', d: 'Triple-camera gimbal with tactical HUD — see first, decide after.' } },
+  { step: 'STEP 02', code: 'FELON-1', cls: 'attack', dir: '../dji-felon-attack/index.html?mode=tour',
+    cn: { t: '精确打击', s: 'STRIKE', d: '扫描锁定后由炮塔随动开火，或发射精确制导弹药。' },
+    en2: { t: 'Precision Strike', s: 'STRIKE', d: 'Lock on, then engage with the tracking turret or guided munitions.' } },
+  { step: 'STEP 03', code: 'MEDEVAC-1', cls: 'medical', dir: '../dji-medical-3d/index.html?mode=tour',
+    cn: { t: '伤员后送', s: 'CASEVAC', d: '生命探测、分诊定级、绞盘吊救，途中持续生命支持。' },
+    en2: { t: 'Casualty Evacuation', s: 'CASEVAC', d: 'Life detection, triage and hoist extraction with en-route life support.' } },
+  { step: 'STEP 04', code: 'FLYCART 100', cls: 'logistics', dir: '../dji-flycart100-3d/index.html?mode=tour',
+    cn: { t: '物资投送', s: 'LOGISTICS', d: '100 kg 载重、40 m 绞盘、实时称重与自动消摆精准投放。' },
+    en2: { t: 'Resupply', s: 'LOGISTICS', d: '100 kg payload, 40 m winch, real-time weighing and anti-sway precision release.' } }
+];
+
+var FEATS = [
+  { cn: { k: 'ENGINE', t: '共享自研引擎', d: '加载器、轨道控制、拾取、爆炸拆解、战术 HUD、参数面板全部抽象为与机型无关的核心，五台机型共用一套代码，新增机型只需两个文件。' },
+    en2: { k: 'ENGINE', t: 'Shared engine', d: 'Loader, orbit control, picking, exploded view, tactical HUD and spec panels are model-agnostic. Five airframes share one engine; a new one needs just two files.' } },
+  { cn: { k: 'GEOMETRY', t: '全代码生成几何', d: '超椭圆截面放样、圆角挤出、程序化桨叶、碳纤维编织与 PCB 贴图全部由代码生成，零外部模型与图片资源。' },
+    en2: { k: 'GEOMETRY', t: 'Fully procedural geometry', d: 'Superellipse lofts, rounded-box extrusion, procedural blades, carbon-weave and PCB textures — zero external models or images.' } },
+  { cn: { k: 'RENDERING', t: '后期处理管线', d: '自写泛光 + ACES 调色 + 暗角 + 胶片颗粒 + 色差，WebGL2 走 4×MSAA；能力不足时自动降级为直出，绝不白屏。' },
+    en2: { k: 'RENDERING', t: 'Post-processing pipeline', d: 'Custom bloom, ACES grading, vignette, film grain and chromatic aberration with 4×MSAA on WebGL2 — plus a safe fallback when unsupported.' } },
+  { cn: { k: 'PHYSICS', t: '真实吊挂动力学', d: '物流页的吊挂摆动是二阶摆方程，机体加速度驱动摆动，自动消摆以主动阻尼抑制，HUD 实时显示摆角。' },
+    en2: { k: 'PHYSICS', t: 'Real slung-load dynamics', d: 'The logistics page solves a second-order pendulum driven by airframe acceleration, with active anti-sway damping and a live swing-angle readout.' } },
+  { cn: { k: 'SIMULATION', t: '任务级模拟', d: '扫描—识别—锁定—交战的作战链、探测—分诊—救护的救援链、吊装—称重—投放的物流链各自独立成状态机。' },
+    en2: { k: 'SIMULATION', t: 'Mission-level simulation', d: 'Three independent state machines: scan→ID→lock→engage, detect→triage→rescue, and hook→weigh→release.' } },
+  { cn: { k: 'QUALITY', t: '自动化验证', d: '每页都有 Node 冒烟测试（加载时序、DOM id 完整性、数值健全性、机构功能），并自写 PBR 软件渲染器预测浏览器实际观感。' },
+    en2: { k: 'QUALITY', t: 'Automated verification', d: 'Every page ships a Node smoke test (load order, DOM id integrity, numeric sanity, mechanism behaviour) plus a self-written PBR software renderer used to predict the in-browser result.' } },
+  { cn: { k: 'PRESENTATION', t: '展台级演示', d: '电影级演示巡航（自动镜头轨迹 + 自动拆解巡展 + 遮幅）、蓝图线框技术模式、中英双语切换。' },
+    en2: { k: 'PRESENTATION', t: 'Showcase mode', d: 'Cinematic showreel with an automated camera path, explode tours and letterbox bars; blueprint wireframe mode; full CN/EN switch.' } },
+  { cn: { k: 'OFFLINE', t: '离线可用', d: 'CDN 优先、超时回退本地 three.min.js，双击即可打开；页内看门狗会把失败原因直接显示出来。' },
+    en2: { k: 'OFFLINE', t: 'Works offline', d: 'CDN-first with a local three.min.js fallback; double-click to open. A boot watchdog reports any failure reason on screen.' } }
+];
+
+var LANG = 'cn';
+var I18N = {
+  cn: { brand: '无人系统可视化套件', nav1: '体系链路', nav2: '在库机型', nav3: '技术实现',
+    navfleet: '机型', navparts: '部件',
+    kicker: '全流程由代码生成 · 无外部模型与贴图',
+    h2: '从<em>拆解</em>到<em>任务模拟</em><br>一体化无人系统可视化',
+    lead: '面向无人系统展示的纯前端套件：五台机型、五个可交互场景、同一个自研 Three.js 引擎。每台都能逐部件拆解并查看规格参数，其中作战、救护、物流三型带完整任务模拟——雷达扫描与锁定、生命探测与分诊、吊装称重与自动消摆，全部实时运行。',
+    cta1: '▶ 开始演示巡航', cta2: '体系链路', cta3: '技术图纸模式',
+    sys: '体系链路：侦察 → 打击 → 救护 → 补给',
+    sysp: '四台机型不是孤立模型，而是一条完整的无人系统链路：感知、打击、后送、投送各自对应一套可交互的任务模拟。',
+    fleet: '在库机型', fleetp: '每台机型都可逐部件拆解、查看实测规格参数，并进入对应的任务模拟。卡片上的入口分别直达拆解态、演示巡航与技术图纸。',
+    tech: '技术实现', techp: '一套自研共享引擎驱动全部机型：几何、材质、光照、拾取、拆解、HUD、后期处理都由代码生成，没有任何外部模型或图片资源。',
+    foot1: '打开方式：直接双击各机型目录下的 <code>index.html</code>（经典 script 标签，<code>file://</code> 可用），也可用 <code>npx serve .</code>。',
+    foot2: '离线兜底：所有页面 CDN 优先，3.5 秒超时自动回退本地 <code>vendor/three.min.js</code>；页内自带启动看门狗，失败会直接显示原因。',
+    foot3: '快捷键：<code>T</code> 演示巡航 · <code>B</code> 技术图纸 · <code>U</code> 中英切换 · <code>E</code> 拆解 · <code>R</code> 重置视角',
+    foot4: '所有尺寸与参数为可视化演示用途，非任何真实产品的工程图纸。',
+    enter: '进入任务模拟', explode: '拆解查看', tour: '演示巡航', blueprint: '技术图纸',
+    statLabels: [['机型', 'DOCKS'], ['可拆部件', 'PARTS'], ['任务模拟', 'SIMULATIONS'], ['外部资源', 'ASSETS']] },
+  en: { brand: 'UNMANNED SYSTEM LAB', nav1: 'SYSTEM', nav2: 'FLEET', nav3: 'ENGINEERING',
+    navfleet: 'DOCKS', navparts: 'PARTS',
+    kicker: 'EVERYTHING PROCEDURAL · NO EXTERNAL MODELS OR TEXTURES',
+    h2: 'From <em>teardown</em> to <em>mission simulation</em><br>an integrated unmanned-system showcase',
+    lead: 'A pure front-end suite built for unmanned-system exhibition: five airframes, five interactive scenes, one self-developed Three.js engine. Every airframe can be disassembled part by part with real specifications, and the strike, medical and logistics platforms run full mission simulations — radar scan and lock-on, life detection and triage, winch pick-up with weighing and active anti-sway.',
+    cta1: '▶ Start showreel', cta2: 'System chain', cta3: 'Blueprint mode',
+    sys: 'System chain: Recon → Strike → CASEVAC → Resupply',
+    sysp: 'These airframes are not isolated models but one unmanned-system chain: sensing, strike, evacuation and resupply each backed by an interactive mission simulation.',
+    fleet: 'Fleet', fleetp: 'Every airframe can be disassembled part by part with real specifications and then driven through its mission simulation. The card entries jump straight to the exploded state, the showreel or the blueprint.',
+    tech: 'Engineering', techp: 'One shared engine drives every airframe: geometry, materials, lighting, picking, exploded view, HUD and post-processing are all generated in code — no external models or images.',
+    foot1: 'Open: double-click <code>index.html</code> inside any airframe folder (classic script tags, works over <code>file://</code>), or run <code>npx serve .</code>.',
+    foot2: 'Offline fallback: every page tries the CDN first and falls back to the local <code>vendor/three.min.js</code> after 3.5 s; a boot watchdog reports failures on screen.',
+    foot3: 'Shortcuts: <code>T</code> showreel · <code>B</code> blueprint · <code>U</code> language · <code>E</code> explode · <code>R</code> reset view',
+    foot4: 'All dimensions and parameters are for visualisation purposes only, not engineering drawings of any real product.',
+    enter: 'Enter simulation', explode: 'Teardown', tour: 'Showreel', blueprint: 'Blueprint',
+    statLabels: [['Docks', 'DOCKS'], ['Parts', 'PARTS'], ['Simulations', 'SIMULATIONS'], ['External assets', 'ASSETS']] }
+};
+
+function el(tag, cls, html) {
+  var d = document.createElement(tag);
+  if (cls) d.className = cls;
+  if (html !== undefined) d.innerHTML = html;
+  return d;
+}
+function pick(o) { return LANG === 'en' ? (o.en2 || o.cn) : o.cn; }
+
+function render() {
+  var T = I18N[LANG];
+  document.documentElement.lang = LANG === 'en' ? 'en' : 'zh-CN';
+  document.getElementById('t-brand').textContent = T.brand;
+  ['nav1', 'nav2', 'nav3', 'navfleet', 'navparts', 'kicker', 'h2', 'lead', 'cta1', 'cta2', 'cta3',
+   'sys', 'sysp', 'fleet', 'fleetp', 'tech', 'techp', 'foot1', 'foot2', 'foot3', 'foot4'].forEach(function (k) {
+    var n = document.getElementById('t-' + k);
+    if (n) n.innerHTML = T[k];
+  });
+  document.getElementById('langbtn').textContent = LANG === 'en' ? '中文' : 'EN';
+
+  var total = FLEET.reduce(function (s, f) { return s + f.parts; }, 0);
+  document.getElementById('nav-count').textContent = FLEET.length;
+  document.getElementById('nav-parts').textContent = total;
+  var sims = FLEET.filter(function (f) { return f.tier === 1; }).length;
+  var stats = document.getElementById('stats');
+  stats.innerHTML = '';
+  var vals = [String(FLEET.length), String(total), String(sims), '0'];
+  T.statLabels.forEach(function (s, i) {
+    stats.appendChild(el('div', 'stat', '<b>' + vals[i] + '</b><span>' + s[0] + ' / ' + s[1] + '</span>'));
+  });
+
+  var chain = document.getElementById('chain');
+  chain.innerHTML = '';
+  CHAIN.forEach(function (c) {
+    var d = pick(c);
+    var a = el('a', 'link ' + c.cls,
+      '<div class="bar"></div><div class="step">' + c.step + ' · ' + c.code + '</div>' +
+      '<h4>' + d.t + '</h4><small>' + d.s + '</small><p>' + d.d + '</p><span class="go">→</span>');
+    a.href = c.dir;
+    chain.appendChild(a);
+  });
+
+  var grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  FLEET.forEach(function (f) {
+    var d = pick(f);
+    var card = el('article', 'card' + (f.tier === 2 ? ' minor' : ''));
+    var thumb = el('div', 'thumb');
+    thumb.appendChild(el('div', 'scan'));
+    thumb.appendChild(el('span', 'code', f.code));
+    thumb.appendChild(el('span', 'cat ' + f.cat, d.cat));
+    var img = document.createElement('img');
+    img.src = f.thumb; img.alt = d.name; img.loading = 'lazy';
+    img.onerror = function () { img.remove(); };
+    thumb.appendChild(img);
+    card.appendChild(thumb);
+
+    var body = el('div', 'body');
+    body.appendChild(el('h3', '', d.name));
+    body.appendChild(el('div', 'en', d.en));
+    body.appendChild(el('p', 'desc', d.desc));
+    var ul = el('ul', 'specs');
+    d.specs.forEach(function (s) {
+      ul.appendChild(el('li', '', '<span class="k">' + s[0] + '</span><span class="v">' + s[1] + '</span>'));
+    });
+    body.appendChild(ul);
+
+    var modes = el('div', 'modes');
+    modes.appendChild(el('span', 'mode', T.explode));
+    modes.appendChild(el('span', 'mode', T.tour));
+    modes.appendChild(el('span', 'mode', T.blueprint));
+    if (f.tier === 1) modes.appendChild(el('span', 'mode', 'MISSION SIM'));
+    body.appendChild(modes);
+
+    var acts = el('div', 'acts');
+    if (f.tier === 1) {
+      var a1 = el('a', 'primary', T.enter);
+      a1.href = f.dir + '?mode=sim';
+      acts.appendChild(a1);
+    }
+    var a2 = el('a', f.tier === 1 ? '' : 'primary', T.explode);
+    a2.href = f.dir + '?mode=explode';
+    acts.appendChild(a2);
+    var a3 = el('a', 'amber', T.tour);
+    a3.href = f.dir + '?mode=tour';
+    acts.appendChild(a3);
+    if (f.tier !== 1) {
+      var a4 = el('a', '', T.blueprint);
+      a4.href = f.dir + '?mode=blueprint';
+      acts.appendChild(a4);
+    }
+    body.appendChild(acts);
+    card.appendChild(body);
+    grid.appendChild(card);
+  });
+
+  var feats = document.getElementById('feats');
+  feats.innerHTML = '';
+  FEATS.forEach(function (f) {
+    var d = pick(f);
+    feats.appendChild(el('div', 'feat', '<div class="ic">' + d.k + '</div><h4>' + d.t + '</h4><p>' + d.d + '</p>'));
+  });
+}
+
+document.getElementById('langbtn').addEventListener('click', function () {
+  LANG = LANG === 'en' ? 'cn' : 'en';
+  try { if (window.localStorage) window.localStorage.setItem('dji-hub-lang', LANG); } catch (e) {}
+  render();
+});
+try {
+  if (window.localStorage && window.localStorage.getItem('dji-hub-lang')) LANG = window.localStorage.getItem('dji-hub-lang');
+} catch (e) {}
+render();
+
+/* ---- 程序化音乐（Web Audio，零外部音频文件）---- */
+var HUB_A = null, HUB_BTN = document.getElementById('musicbtn');
+function hubWanted() {
+  try { return !window.localStorage || window.localStorage.getItem('dji-hub-music') !== 'off'; }
+  catch (e) { return true; }
+}
+function hubPref(on) {
+  try { if (window.localStorage) window.localStorage.setItem('dji-hub-music', on ? 'on' : 'off'); } catch (e) {}
+  if (HUB_BTN) { HUB_BTN.classList.toggle('on', !!on); HUB_BTN.textContent = on ? '\uD83D\uDD0A' : '\uD83D\uDD07'; }
+}
+function hubStart() {
+  if (HUB_A || !hubWanted()) return;
+  try {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    var ctx = new AC(), master = ctx.createGain();
+    master.gain.value = 0.0001; master.connect(ctx.destination);
+    var lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 360; lp.Q.value = 0.7;
+    lp.connect(master);
+    [55, 55.45, 82.5].forEach(function (f, i) {
+      var o = ctx.createOscillator(); o.type = i === 2 ? 'triangle' : 'sawtooth'; o.frequency.value = f;
+      var g = ctx.createGain(); g.gain.value = i === 2 ? 0.10 : 0.16;
+      o.connect(g); g.connect(lp); o.start();
+    });
+    var lfo = ctx.createOscillator(); lfo.frequency.value = 0.045;
+    var lg = ctx.createGain(); lg.gain.value = 185;
+    lfo.connect(lg); lg.connect(lp.frequency); lfo.start();
+    var buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), ch = buf.getChannelData(0);
+    for (var i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * 0.5;
+    var ns = ctx.createBufferSource(); ns.buffer = buf; ns.loop = true;
+    var bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 600; bp.Q.value = 0.6;
+    var ng = ctx.createGain(); ng.gain.value = 0.026;
+    ns.connect(bp); bp.connect(ng); ng.connect(master); ns.start();
+    HUB_A = { ctx: ctx, master: master, on: false, chords: 0 };
+    var PROG = [[110, 164.8, 220, 261.6], [87.3, 130.8, 174.6, 220], [130.8, 164.8, 196, 261.6],
+                [98, 146.8, 196, 246.9]];
+    setInterval(function () {
+      if (!HUB_A || !HUB_A.on) return;
+      var f = PROG[HUB_A.chords++ % PROG.length], now = ctx.currentTime;
+      f.forEach(function (fr, k) {
+        var o = ctx.createOscillator(); o.type = k === 0 ? 'triangle' : 'sine'; o.frequency.value = fr;
+        var g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.linearRampToValueAtTime(k === 0 ? 0.05 : 0.03, now + 3.2);
+        g.gain.linearRampToValueAtTime(0.0001, now + 9.2);
+        o.connect(g); g.connect(master); o.start(now); o.stop(now + 9.6);
+      });
+    }, 9000);
+    setInterval(function () {
+      if (!HUB_A || !HUB_A.on) return;
+      var now = ctx.currentTime, o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 1180;
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.045, now); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+      o.connect(g); g.connect(master); o.start(now); o.stop(now + 0.5);
+    }, 2000);
+    hubToggle(true);
+  } catch (e) { HUB_A = null; }
+}
+function hubToggle(on) {
+  if (!HUB_A) { if (on) hubStart(); hubPref(on); return; }
+  try {
+    HUB_A.on = !!on;
+    var t = HUB_A.ctx.currentTime;
+    HUB_A.master.gain.cancelScheduledValues(t);
+    HUB_A.master.gain.setValueAtTime(Math.max(HUB_A.master.gain.value, 0.0001), t);
+    HUB_A.master.gain.linearRampToValueAtTime(on ? 0.11 : 0.0001, t + (on ? 2.2 : 0.8));
+    if (on && HUB_A.ctx.state === 'suspended') HUB_A.ctx.resume();
+  } catch (e) {}
+  hubPref(on);
+}
+if (HUB_BTN) HUB_BTN.addEventListener('click', function () {
+  if (!HUB_A && hubWanted()) { hubStart(); return; }
+  hubToggle(!(HUB_A && HUB_A.on));
+});
+document.addEventListener('click', function () { if (!HUB_A && hubWanted()) hubStart(); }, { once: true });
+hubPref(hubWanted());
+
+/* ---- 启动配置：dsh-startup.json（http）/ dsh-startup.js（file://）---- */
+(function hubStartup() {
+  var DEF = { brand: 'UNMANNED SYSTEM LAB', autoEnterMs: 2200,
+    bootLines: ['FLEET MANIFEST .......... 5 DOCKS', 'PROCEDURAL ASSETS ..... 0 EXTERNAL',
+                'MISSION MODULES ....... 3 ACTIVE', 'LINK ESTABLISHED'] };
+  var done = false;
+  function apply(cfg) {
+    if (done) return;
+    done = true;
+    cfg = cfg || {};
+    var brand = document.getElementById('boot-brand');
+    if (brand && cfg.brand) brand.textContent = cfg.brand;
+    if (cfg.accent) document.documentElement.style.setProperty('--green', cfg.accent);
+    var lines = cfg.bootLines || DEF.bootLines;
+    var box = document.getElementById('boot-log');
+    var i = 0;
+    if (box) {
+      var timer = setInterval(function () {
+        if (i >= lines.length) { clearInterval(timer); return; }
+        var d = document.createElement('div');
+        d.innerHTML = '<i>\u2713</i><span>' + lines[i] + '</span>';
+        box.appendChild(d);
+        setTimeout(function () { d.classList.add('in'); }, 16);
+        i++;
+      }, 300);
+    }
+    var wait = Math.max(cfg.autoEnterMs || DEF.autoEnterMs, (lines.length * 300) + 320);
+    setTimeout(function () {
+      var b = document.getElementById('boot2');
+      if (b) { b.classList.add('hide'); setTimeout(function () { if (b.parentNode) b.parentNode.removeChild(b); }, 700); }
+    }, wait);
+  }
+  if (window.DSH_STARTUP) return apply(window.DSH_STARTUP);
+  try {
+    if (typeof fetch === 'function' && location.protocol !== 'file:') {
+      fetch('dsh-startup.json', { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(apply).catch(function () { apply(null); });
+      setTimeout(function () { apply(null); }, 1200);
+      return;
+    }
+  } catch (e) {}
+  try {
+    var sc = document.createElement('script');
+    sc.src = 'dsh-startup.js';
+    sc.onload = function () { apply(window.DSH_STARTUP); };
+    sc.onerror = function () { apply(null); };
+    document.head.appendChild(sc);
+    setTimeout(function () { apply(null); }, 1200);
+  } catch (e2) { apply(null); }
+})();
+
+(function hero() {
+  var cv = document.getElementById('heroCanvas');
+  if (!cv || !cv.getContext) return;
+  var ctx = cv.getContext('2d');
+  var W = 0, H = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var P = [], E = [];
+  function v(x, y, z) { P.push([x, y, z]); return P.length - 1; }
+  var bodyU = [v(-0.30, 0.10, 0.42), v(0.30, 0.10, 0.42), v(0.30, 0.10, -0.42), v(-0.30, 0.10, -0.42)];
+  var bodyL = [v(-0.24, -0.06, 0.36), v(0.24, -0.06, 0.36), v(0.24, -0.06, -0.36), v(-0.24, -0.06, -0.36)];
+  var i;
+  for (i = 0; i < 4; i++) { E.push([bodyU[i], bodyU[(i + 1) % 4]]); E.push([bodyL[i], bodyL[(i + 1) % 4]]); E.push([bodyU[i], bodyL[i]]); }
+  [[0.55, 0.55], [-0.55, 0.55], [0.55, -0.55], [-0.55, -0.55]].forEach(function (a) {
+    var r = v(Math.sign(a[0]) * 0.22, 0.06, Math.sign(a[1]) * 0.24);
+    var hubU = v(a[0], 0.20, a[1]);
+    var hubL = v(a[0], 0.05, a[1]);
+    E.push([r, hubU]); E.push([r, hubL]);
+    var disc = [], disc2 = [], k;
+    for (k = 0; k < 16; k++) {
+      var ang = k / 16 * Math.PI * 2;
+      disc.push(v(a[0] + Math.cos(ang) * 0.30, 0.24, a[1] + Math.sin(ang) * 0.30));
+      disc2.push(v(a[0] + Math.cos(ang) * 0.26, 0.00, a[1] + Math.sin(ang) * 0.26));
+    }
+    for (k = 0; k < 16; k++) { E.push([disc[k], disc[(k + 1) % 16]]); E.push([disc2[k], disc2[(k + 1) % 16]]); }
+    E.push([hubU, disc[0]]);
+  });
+  [[0.24, 0.30], [-0.24, 0.30], [0.24, -0.30], [-0.24, -0.30]].forEach(function (g) {
+    E.push([v(g[0], -0.06, g[1]), v(g[0], -0.34, g[1])]);
+  });
+
+  var stars = [];
+  function resize() {
+    var rect = cv.getBoundingClientRect();
+    W = Math.max(300, rect.width); H = Math.max(220, rect.height);
+    cv.width = Math.floor(W * dpr); cv.height = Math.floor(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  for (var p = 0; p < 90; p++) stars.push({ x: Math.random(), y: Math.random(), z: Math.random(), s: Math.random() * 1.4 + 0.4 });
+
+  var t0 = Date.now();
+  function project(x, y, z, ry, rx, scale, cx, cy) {
+    var c = Math.cos(ry), s = Math.sin(ry);
+    var X = x * c - z * s, Z = x * s + z * c;
+    var c2 = Math.cos(rx), s2 = Math.sin(rx);
+    var Y = y * c2 - Z * s2, Z2 = y * s2 + Z * c2;
+    var f = 1 / (1 + Z2 * 0.34);
+    return [cx + X * scale * f, cy - Y * scale * f, f];
+  }
+
+  function draw() {
+    var t = (Date.now() - t0) / 1000;
+    ctx.clearRect(0, 0, W, H);
+    var cx = W * 0.70, cy = H * 0.50, scale = Math.min(W, H) * 0.60;
+    var horizon = cy + H * 0.30;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(108,224,168,.10)';
+    ctx.lineWidth = 1;
+    for (var gx = -8; gx <= 8; gx++) {
+      ctx.beginPath(); ctx.moveTo(cx + gx * 26, horizon - 8); ctx.lineTo(cx + gx * 210, H + 40); ctx.stroke();
+    }
+    for (var gz = 0; gz < 9; gz++) {
+      var yy = horizon + Math.pow(gz / 8, 2.1) * (H - horizon) * 0.92;
+      ctx.globalAlpha = 0.9 - gz * 0.08;
+      ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.save();
+    var rr = Math.min(W, H) * 0.42, a = (t * 0.55) % (Math.PI * 2);
+    var grd = ctx.createRadialGradient(cx, horizon - 20, 4, cx, horizon - 20, rr);
+    grd.addColorStop(0, 'rgba(108,224,168,.15)');
+    grd.addColorStop(1, 'rgba(108,224,168,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.moveTo(cx, horizon - 20); ctx.arc(cx, horizon - 20, rr, a - 0.5, a); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(108,224,168,.22)';
+    for (var kk = 1; kk <= 3; kk++) {
+      ctx.beginPath(); ctx.ellipse(cx, horizon - 20, rr * kk / 3, rr * kk / 6, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.save();
+    for (var i2 = 0; i2 < stars.length; i2++) {
+      var q = stars[i2];
+      var px = cx + (q.x - 0.5) * W * 1.5 + Math.sin(t * 0.2 + i2) * 6;
+      var py = cy + (q.y - 0.5) * H * 1.1 + Math.cos(t * 0.16 + i2) * 5;
+      ctx.fillStyle = 'rgba(180,220,240,' + (0.10 + q.z * 0.22) + ')';
+      ctx.fillRect(px, py, q.s, q.s);
+    }
+    ctx.restore();
+
+    var ry = t * 0.42, rx = 0.34 + Math.sin(t * 0.3) * 0.06, bob = Math.sin(t * 0.8) * 6;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (var e = 0; e < E.length; e++) {
+      var A = P[E[e][0]], B = P[E[e][1]];
+      var pa = project(A[0], A[1], A[2], ry, rx, scale, cx, cy + bob);
+      var pb = project(B[0], B[1], B[2], ry, rx, scale, cx, cy + bob);
+      var depth = (pa[2] + pb[2]) / 2;
+      var alpha = Math.max(0.06, Math.min(0.72, (depth - 0.62) * 2.1));
+      ctx.strokeStyle = 'rgba(150,240,205,' + alpha + ')';
+      ctx.lineWidth = depth > 1 ? 1.5 : 0.9;
+      ctx.shadowColor = 'rgba(108,224,168,.5)';
+      ctx.shadowBlur = depth > 1 ? 9 : 4;
+      ctx.beginPath(); ctx.moveTo(pa[0], pa[1]); ctx.lineTo(pb[0], pb[1]); ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.save();
+    var sy = ((t * 90) % (H + 260)) - 130;
+    var lg = ctx.createLinearGradient(0, sy - 90, 0, sy + 90);
+    lg.addColorStop(0, 'rgba(108,224,168,0)');
+    lg.addColorStop(0.5, 'rgba(108,224,168,.07)');
+    lg.addColorStop(1, 'rgba(108,224,168,0)');
+    ctx.fillStyle = lg; ctx.fillRect(0, sy - 90, W, 180);
+    ctx.restore();
+
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
+
+/* 启动层淡出时机由 dsh-startup 配置控制（见上方 hubStartup）*/
+</script>
+</body>
+</html>

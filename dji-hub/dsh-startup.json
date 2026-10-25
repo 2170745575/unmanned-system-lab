@@ -1,0 +1,24 @@
+{
+  "brand": "UNMANNED SYSTEM LAB",
+  "kicker": "FLEET TERMINAL · ONLINE",
+  "title": "无人系统可视化套件",
+  "subtitle": "UNMANNED SYSTEM LAB · FIVE AIRFRAMES",
+  "tagline": "侦察 · 打击 · 救护 · 补给",
+  "accent": "#6ce0a8",
+  "accent2": "#5fd0f0",
+  "autoEnterMs": 2200,
+  "music": true,
+  "scanOnEnter": false,
+  "tips": [
+    "点击卡片进入机型",
+    "T 演示巡航",
+    "B 技术图纸",
+    "U 中英切换"
+  ],
+  "bootLines": [
+    "FLEET MANIFEST .......... 5 DOCKS",
+    "PROCEDURAL ASSETS ..... 0 EXTERNAL",
+    "MISSION MODULES ....... 3 ACTIVE",
+    "LINK ESTABLISHED"
+  ]
+}
